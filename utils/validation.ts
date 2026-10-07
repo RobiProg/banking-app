@@ -53,3 +53,17 @@ export function clearFieldError<K extends string>(
   if (!errors[key]) return errors;
   return { ...errors, [key]: undefined };
 }
+
+/**
+ * User-facing error strings. Exported alongside the boolean validators so
+ * screens can opt into them without breaking back-compat for callers that
+ * only need the boolean result.
+ */
+export const emailErrorMessage = 'Please enter a valid email address.';
+export const passwordRequiredMessage = 'Password is required.';
+export const passwordLengthMessage = 'Password must be at least 8 characters.';
+export const passwordMismatchMessage = 'Passwords do not match.';
+export const phoneRequiredMessage = 'Phone number is required.';
+export const phoneInvalidMessage =
+  'Please enter a valid phone number (7-15 digits).';
+export const fullNameRequiredMessage = 'Full name is required.';

@@ -6,6 +6,7 @@ import {
   Text,
 } from 'react-native';
 import { colors } from '../../constants/colors';
+import { typography } from '../../constants/layout';
 
 type AuthButtonProps = {
   title: string;
@@ -13,11 +14,12 @@ type AuthButtonProps = {
   loading?: boolean;
   disabled?: boolean;
   variant?: 'primary' | 'secondary';
+  accessibilityHint?: string;
 };
 
 /**
  * Primary call-to-action button used on auth screens.
- * Shows a spinner and locks input while `loading` is true.
+ * Shows a spinner, dims, and locks input while `loading` is true.
  */
 export function AuthButton({
   title,
@@ -25,13 +27,17 @@ export function AuthButton({
   loading = false,
   disabled = false,
   variant = 'primary',
+  accessibilityHint,
 }: AuthButtonProps) {
   const isInactive = loading || disabled;
   const isPrimary = variant === 'primary';
+  const a11yLabel = loading ? `${title}, loading` : title;
 
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={a11yLabel}
+      accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: isInactive, busy: loading }}
       onPress={onPress}
       disabled={isInactive}
@@ -39,6 +45,7 @@ export function AuthButton({
         styles.base,
         isPrimary ? styles.primary : styles.secondary,
         isInactive && styles.disabled,
+        loading && styles.loading,
         pressed && !isInactive && styles.pressed,
       ]}
     >
@@ -67,7 +74,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 14,
     paddingHorizontal: 16,
-    minHeight: 50,
+    minHeight: 52,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
@@ -79,16 +86,20 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     borderWidth: 1,
     borderColor: colors.primary,
+    minHeight: 48,
   },
   disabled: {
     backgroundColor: colors.primaryDark,
     opacity: 0.6,
   },
+  loading: {
+    opacity: 0.7,
+  },
   pressed: {
     opacity: 0.85,
   },
   text: {
-    fontSize: 16,
+    fontSize: typography.body.size + 1, // 16
     fontWeight: '600',
   },
   textPrimary: {

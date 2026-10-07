@@ -43,8 +43,15 @@ function mapAuthError(message: string): string {
   if (m.includes('rate limit')) {
     return 'Too many attempts. Please wait a moment and try again.';
   }
-  if (m.includes('network') || m.includes('fetch')) {
-    return 'Network error. Please check your connection and try again.';
+  if (
+    m.includes('network') ||
+    m.includes('fetch') ||
+    m.includes('timeout') ||
+    m.includes('failed to fetch') ||
+    m.includes('aborted') ||
+    m.includes('internal error')
+  ) {
+    return "We couldn't reach the server. Check your connection and try again.";
   }
   if (m.includes('password should be')) {
     return 'Password does not meet the strength requirements.';

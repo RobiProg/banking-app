@@ -19,9 +19,11 @@ export const colors = {
 
   error: '#D32F2F',
   errorBg: '#FDECEC',
+  errorLight: '#FCE8E6',
   warning: '#ED6C02',
   success: '#2E7D32',
   successBg: '#E6F4EA',
+  successLight: '#E6F4EA',
 } as const;
 
 export type ColorKey = keyof typeof colors;

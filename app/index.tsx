@@ -1,11 +1,14 @@
 import React, { useEffect, useRef } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { ScreenContainer } from '../components/auth/ScreenContainer';
 import { colors } from '../constants/colors';
+import { spacing, typography } from '../constants/layout';
 import { ROUTES } from '../constants/routes';
 import { getSession } from '../services/auth';
 
 const MIN_VISIBLE_MS = 800;
+const APP_VERSION = '1.0.0';
 
 export default function SplashScreen() {
   const router = useRouter();
@@ -38,53 +41,81 @@ export default function SplashScreen() {
   }, [router]);
 
   return (
-    <View style={styles.container}>
-      <View style={styles.logoMark}>
-        <Text style={styles.logoMarkText}>SB</Text>
+    <ScreenContainer scrollable={false} centered>
+      <View style={styles.fill}>
+        <View style={styles.center}>
+          <View style={styles.card} accessible accessibilityRole="image">
+            <View style={styles.logoPlate}>
+              <Text style={styles.logoMarkText}>SB</Text>
+            </View>
+          </View>
+          <Text style={styles.appName}>SmartBank</Text>
+          <Text style={styles.tagline}>Secure digital banking</Text>
+          <View style={styles.loaderWrap}>
+            <ActivityIndicator color={colors.primary} />
+          </View>
+        </View>
+        <Text style={styles.versionTag}>v{APP_VERSION}</Text>
       </View>
-      <Text style={styles.appName}>SmartBank</Text>
-      <Text style={styles.tagline}>Secure digital banking</Text>
-      <View style={styles.loaderWrap}>
-        <ActivityIndicator color={colors.primary} />
-      </View>
-    </View>
+    </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  fill: {
     flex: 1,
-    backgroundColor: colors.background,
+    justifyContent: 'space-between',
+  },
+  center: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 24,
   },
-  logoMark: {
-    width: 84,
-    height: 84,
-    borderRadius: 20,
+  card: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
+  },
+  logoPlate: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 24,
+    shadowColor: colors.primaryDark,
+    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
+    elevation: 6,
   },
   logoMarkText: {
     color: colors.textOnPrimary,
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: '800',
     letterSpacing: 1,
   },
   appName: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: typography.title.size + 4, // 32
+    fontWeight: typography.title.weight,
     color: colors.text,
-    marginBottom: 6,
+    marginBottom: spacing.xs + 2, // 6
+    letterSpacing: 0.3,
   },
   tagline: {
-    fontSize: 14,
+    fontSize: typography.subtitle.size,
     color: colors.textMuted,
+    opacity: 0.85,
   },
   loaderWrap: {
-    marginTop: 36,
+    marginTop: spacing.xl + spacing.xs, // 36
+    marginBottom: spacing.lg,
+  },
+  versionTag: {
+    color: colors.textMuted,
+    fontSize: typography.helper.size,
+    opacity: 0.7,
+    textAlign: 'center',
+    paddingBottom: spacing.md,
   },
 });
