@@ -1,14 +1,21 @@
 import React, { useEffect, useRef } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as ExpoSplashScreen from 'expo-splash-screen';
 import { ScreenContainer } from '../components/auth/ScreenContainer';
 import { colors } from '../constants/colors';
 import { spacing, typography } from '../constants/layout';
 import { ROUTES } from '../constants/routes';
 import { getSession } from '../services/auth';
 
-const MIN_VISIBLE_MS = 800;
+const MIN_VISIBLE_MS = 2000;
 const APP_VERSION = '1.0.0';
+
+// Keep the native splash on screen until we explicitly hide it. Without
+// this, the native splash can disappear before our JS splash mounts.
+ExpoSplashScreen.preventAutoHideAsync().catch(() => {
+  // Safe to ignore — older Expo Go builds ignore this call.
+});
 
 export default function SplashScreen() {
   const router = useRouter();
@@ -23,8 +30,14 @@ export default function SplashScreen() {
       const elapsed = Date.now() - startedAtRef.current;
       const wait = Math.max(0, MIN_VISIBLE_MS - elapsed);
 
-      timeoutRef.current = setTimeout(() => {
+      timeoutRef.current = setTimeout(async () => {
         if (cancelled) return;
+        // Hand control from the native splash to our JS splash.
+        try {
+          await ExpoSplashScreen.hideAsync();
+        } catch {
+          // ignore — splash module may not be available in Expo Go sandbox.
+        }
         router.replace(session ? ROUTES.app : ROUTES.login);
       }, wait);
     }
