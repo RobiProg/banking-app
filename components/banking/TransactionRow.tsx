@@ -98,11 +98,12 @@ function subtitleFor(
   direction: TxnDirection,
   counterpartAccountNumber?: string | null,
 ): string {
-  if (t.transaction_type === 'deposit') return 'Self deposit';
-  if (t.transaction_type === 'withdrawal') return 'Self withdrawal';
-  if (t.transaction_type === 'transfer') {
-    if (direction === 'credit') return `From ${counterpartAccountNumber ?? 'another account'}`;
-    if (direction === 'debit') return `To ${counterpartAccountNumber ?? 'another account'}`;
+  const effType = t.type ?? t.transaction_type;
+  if (effType === 'deposit') return t.description || 'Simulated branch deposit';
+  if (effType === 'withdrawal') return 'Simulated withdrawal';
+  if (effType === 'transfer') {
+    if (direction === 'credit') return `From ${counterpartAccountNumber ?? 'SmartBank account'}`;
+    if (direction === 'debit') return `To ${counterpartAccountNumber ?? 'SmartBank account'}`;
   }
   return t.description ?? '';
 }

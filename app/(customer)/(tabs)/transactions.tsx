@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { colors } from '../../../constants/colors';
 import { spacing, typography } from '../../../constants/layout';
+import { ROUTES } from '../../../constants/routes';
 import { LoadingState } from '../../../components/common/LoadingState';
 import { ErrorState } from '../../../components/common/ErrorState';
 import { EmptyState } from '../../../components/common/EmptyState';
@@ -121,8 +122,8 @@ export default function CustomerTransactionsTab() {
                 ? 'Once you make or receive money, your activity will appear here.'
                 : `You have no ${filter} transactions yet.`
             }
-            ctaLabel="Make a deposit"
-            onPressCta={() => router.push('/(customer)/deposit' as never)}
+            ctaLabel="Send money"
+            onPressCta={() => router.push(ROUTES.sendMoney)}
           />
         </View>
       ) : (

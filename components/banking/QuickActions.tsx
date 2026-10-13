@@ -14,8 +14,8 @@ type Action = {
 
 const ACTIONS: Action[] = [
   { key: 'send', label: 'Send', glyph: '→', route: ROUTES.sendMoney },
-  { key: 'deposit', label: 'Deposit', glyph: '+', route: ROUTES.deposit },
   { key: 'withdraw', label: 'Withdraw', glyph: '−', route: ROUTES.withdraw },
+  { key: 'history', label: 'History', glyph: '⏱', route: ROUTES.transactions },
   { key: 'account', label: 'Account', glyph: '◧', route: ROUTES.account },
 ];
 

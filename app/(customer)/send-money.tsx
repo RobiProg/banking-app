@@ -14,46 +14,50 @@ import { Card } from '../../components/common/Card';
 import { Money } from '../../components/common/Money';
 import { colors } from '../../constants/colors';
 import { spacing, typography } from '../../constants/layout';
+import { ROUTES } from '../../constants/routes';
 import { useAccount } from '../../hooks/useAccount';
-import { lookupAccount } from '../../services/accounts';
-import { transferMoney } from '../../services/transactions';
-import { formatBDT, isValidAmountInput } from '../../utils/format';
-import { parseAmount } from '../../types/db';
+import { lookupRecipient } from '../../services/accounts';
+import { appTransfer, generateIdempotencyKey } from '../../services/transactions';
+import { formatBDT, isValidBankingAmount } from '../../utils/format';
+import { parseAmount, type RecipientLookupInfo, type Transaction } from '../../types/db';
 
 type Step = 1 | 2 | 3;
 
 /**
- * Send money (Phase 10) — 3-step flow:
- *   1. Recipient account number (with lookup validation)
- *   2. Amount + optional note
- *   3. Confirmation sheet
- *
- * The actual transfer runs through the atomic `transfer_money` RPC.
+ * Send Money Screen (SRS v2.1 FR-TRF-01..13, design.md §5.1 / §6.4).
+ * Multi-step flow:
+ *   1. Recipient account number -> Lookup returns abbreviated name, masked account, branch.
+ *   2. Amount (strict 2 decimal places, max limit, remaining balance) + optional note.
+ *   3. Confirmation sheet with zero transfer fee notice and UUID idempotency key.
+ *   4. Success receipt modal with unique reference.
  */
 export default function SendMoneyScreen() {
   const router = useRouter();
   const { account, loading, errorMessage, reload } = useAccount();
 
   const [step, setStep] = useState<Step>(1);
-  const [recipient, setRecipient] = useState('');
-  const [recipientStatus, setRecipientStatus] = useState<{
-    checking: boolean;
-    exists: boolean | null;
-    statusMsg: string | null;
-  }>({ checking: false, exists: null, statusMsg: null });
+  const [recipientNumber, setRecipientNumber] = useState('');
+  const [recipientInfo, setRecipientInfo] = useState<RecipientLookupInfo | null>(null);
+  const [recipientChecking, setRecipientChecking] = useState(false);
+  const [recipientError, setRecipientError] = useState<string | null>(null);
+
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
+  const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
+
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [transferError, setTransferError] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [completedTxn, setCompletedTxn] = useState<Transaction | null>(null);
 
   if (loading) {
     return (
       <ScreenContainer scrollable={false} centered>
-        <LoadingState label="Loading…" />
+        <LoadingState label="Loading your account…" />
       </ScreenContainer>
     );
   }
+
   if (errorMessage || !account) {
     return (
       <ScreenContainer scrollable={false} centered>
@@ -80,274 +84,501 @@ export default function SendMoneyScreen() {
     );
   }
 
-  async function validateRecipient(): Promise<boolean> {
-    const trimmed = recipient.trim();
+  // --- Step 1: Validate Recipient ---
+  async function handleValidateRecipient() {
+    const trimmed = recipientNumber.trim().toUpperCase();
     if (!trimmed) {
-      setRecipientStatus({ checking: false, exists: null, statusMsg: 'Please enter an account number.' });
-      return false;
-    }
-    if (trimmed === account!.account_number) {
-      setRecipientStatus({
-        checking: false,
-        exists: null,
-        statusMsg: 'You cannot transfer to your own account.',
-      });
-      return false;
-    }
-    setRecipientStatus({ checking: true, exists: null, statusMsg: null });
-    const res = await lookupAccount(trimmed);
-    if (res.errorMessage) {
-      setRecipientStatus({ checking: false, exists: false, statusMsg: res.errorMessage });
-      return false;
-    }
-    if (!res.info) {
-      setRecipientStatus({ checking: false, exists: false, statusMsg: 'No account found.' });
-      return false;
-    }
-    if (res.info.status !== 'active') {
-      setRecipientStatus({
-        checking: false,
-        exists: false,
-        statusMsg: 'Recipient account is inactive.',
-      });
-      return false;
-    }
-    setRecipientStatus({ checking: false, exists: true, statusMsg: null });
-    return true;
-  }
-
-  async function handleContinueFromRecipient() {
-    const ok = await validateRecipient();
-    if (ok) setStep(2);
-  }
-
-  const balanceNum = parseAmount(account.balance);
-  const validation = isValidAmountInput(amount);
-  const overBalance = validation.ok && (validation.value ?? 0) > balanceNum;
-  const showAmountError =
-    !validation.ok
-      ? validation.message ?? null
-      : overBalance
-      ? 'Amount exceeds your available balance.'
-      : null;
-  const canContinueFromAmount = validation.ok && !overBalance;
-
-  async function handleConfirmTransfer() {
-    if (!validation.ok || overBalance) return;
-    setSubmitting(true);
-    setError(null);
-    const res = await transferMoney(
-      recipient.trim(),
-      validation.value!,
-      note.trim() || null,
-    );
-    setSubmitting(false);
-    if (res.errorMessage) {
-      setError(res.errorMessage);
+      setRecipientError('Please enter an account number.');
       return;
     }
-    router.replace({
-      pathname: '/(customer)/transaction-details',
-      params: { id: res.transaction!.id, just: '1' },
+
+    if (trimmed === account?.account_number) {
+      setRecipientError("You cannot transfer to your own account (FR-TRF-09).");
+      return;
+    }
+
+    setRecipientChecking(true);
+    setRecipientError(null);
+    setRecipientInfo(null);
+
+    const res = await lookupRecipient(trimmed);
+    setRecipientChecking(false);
+
+    if (res.errorMessage) {
+      setRecipientError(res.errorMessage);
+      return;
+    }
+
+    if (!res.info) {
+      setRecipientError('No SmartBank account found for that number.');
+      return;
+    }
+
+    if (!res.info.eligible || res.info.status !== 'active') {
+      setRecipientError('Recipient account is not active or ineligible to receive funds.');
+      return;
+    }
+
+    setRecipientInfo(res.info);
+    setStep(2);
+  }
+
+  // --- Step 2: Validate Amount ---
+  const balanceNum = parseAmount(account.balance);
+  const amountValidation = isValidBankingAmount(amount);
+  const amountNum = amountValidation.value ?? 0;
+  const isOverBalance = amountValidation.ok && amountNum > balanceNum;
+  const remainingBalance = balanceNum - amountNum;
+
+  function handleOpenConfirm() {
+    if (!amountValidation.ok || isOverBalance) return;
+    // Generate UUID idempotency key once upon opening confirmation sheet (design.md §6.4)
+    setIdempotencyKey(generateIdempotencyKey());
+    setShowConfirm(true);
+  }
+
+  // --- Step 3: Execute Transfer ---
+  async function handleConfirmTransfer() {
+    if (!amountValidation.ok || isOverBalance || !recipientInfo) return;
+    setSubmitting(true);
+    setTransferError(null);
+
+    const res = await appTransfer({
+      recipientAccountNumber: recipientInfo.account_number,
+      amount: amountNum,
+      description: note.trim() || null,
+      idempotencyKey: idempotencyKey,
     });
+
+    setSubmitting(false);
+
+    if (res.errorMessage) {
+      setTransferError(res.errorMessage);
+      setShowConfirm(false);
+      return;
+    }
+
+    setShowConfirm(false);
+    setCompletedTxn(res.transaction);
+  }
+
+  // --- Success Modal / Screen ---
+  if (completedTxn) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <ScreenHeader title="Transfer Receipt" />
+        <ScrollView contentContainerStyle={styles.receiptScroll}>
+          <View style={styles.receiptCard}>
+            <View style={styles.successIconPlate}>
+              <Text style={styles.successIcon}>✓</Text>
+            </View>
+            <Text style={styles.receiptTitle}>Transfer Successful</Text>
+            <Money value={completedTxn.amount} size="xl" color={colors.success} />
+
+            <View style={styles.receiptDetails}>
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptLabel}>Reference</Text>
+                <Text style={styles.receiptValue}>{completedTxn.reference}</Text>
+              </View>
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptLabel}>Recipient</Text>
+                <Text style={styles.receiptValue}>{recipientInfo?.abbreviated_name}</Text>
+              </View>
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptLabel}>Account</Text>
+                <Text style={styles.receiptValue}>{recipientInfo?.masked_account_number}</Text>
+              </View>
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptLabel}>Recipient Branch</Text>
+                <Text style={styles.receiptValue}>{recipientInfo?.branch_name}</Text>
+              </View>
+              <View style={styles.receiptRow}>
+                <Text style={styles.receiptLabel}>Transfer Fee</Text>
+                <Text style={styles.receiptValue}>৳0.00 (Zero Fee)</Text>
+              </View>
+              {completedTxn.description && (
+                <View style={styles.receiptRow}>
+                  <Text style={styles.receiptLabel}>Note</Text>
+                  <Text style={styles.receiptValue}>{completedTxn.description}</Text>
+                </View>
+              )}
+            </View>
+
+            <View style={styles.educationalBadge}>
+              <Text style={styles.educationalText}>Educational Simulation • No real funds moved</Text>
+            </View>
+          </View>
+
+          <AuthButton
+            title="Done"
+            onPress={() => router.replace(ROUTES.customer)}
+          />
+        </ScrollView>
+      </SafeAreaView>
+    );
   }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader
         title="Send money"
-        subtitle={step === 1 ? 'Step 1 of 3 — Recipient' : step === 2 ? 'Step 2 of 3 — Amount' : 'Step 3 of 3 — Confirm'}
+        subtitle={`Step ${step} of 2 • SmartBank Internal Transfer`}
       />
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-      >
+
+      <ScrollView contentContainerStyle={styles.scroll}>
+        {/* Source Account Info */}
+        <Card style={styles.sourceCard}>
+          <Text style={styles.sourceLabel}>From Account</Text>
+          <View style={styles.sourceRow}>
+            <View>
+              <Text style={styles.sourceNumber}>{account.account_number}</Text>
+              <Text style={styles.sourceBranch}>
+                {account.branch ? `${account.branch.name} (${account.branch.district})` : 'Dhaka Motijheel Main'}
+              </Text>
+            </View>
+            <View style={styles.balanceRight}>
+              <Text style={styles.balanceCaption}>Available</Text>
+              <Money value={account.balance} size="small" />
+            </View>
+          </View>
+        </Card>
+
+        {transferError && <FormErrorBanner message={transferError} />}
+
+        {/* STEP 1: Recipient Input */}
         {step === 1 && (
-          <View style={styles.stepBody}>
-            <Card variant="surface">
-              <Text style={styles.label}>Your account</Text>
-              <Text style={styles.meta}>{account.account_number}</Text>
-              <Money value={account.balance} size="medium" />
-            </Card>
+          <View style={styles.stepContainer}>
+            <Text style={styles.stepTitle}>Enter Recipient Account</Text>
+            <Text style={styles.stepSubtitle}>
+              SmartBank will look up the branch and verify the recipient automatically.
+            </Text>
 
             <AuthInput
-              label="Recipient account number"
-              value={recipient}
-              onChangeText={(t) => {
-                setRecipient(t);
-                setRecipientStatus({ checking: false, exists: null, statusMsg: null });
-                setError(null);
-              }}
+              label="Recipient Account Number"
               placeholder="e.g. AC1000000002"
+              value={recipientNumber}
+              onChangeText={(t) => {
+                setRecipientNumber(t);
+                setRecipientError(null);
+              }}
               autoCapitalize="characters"
               autoCorrect={false}
-              error={recipientStatus.statusMsg}
-              accessibilityHint="Account number of the person you want to send money to"
+              error={recipientError}
+              editable={!recipientChecking}
             />
-
-            {recipientStatus.checking ? (
-              <Text style={styles.helper}>Checking account…</Text>
-            ) : null}
 
             <AuthButton
-              title="Continue"
-              onPress={handleContinueFromRecipient}
-              disabled={recipientStatus.checking}
+              title="Verify Recipient"
+              onPress={handleValidateRecipient}
+              loading={recipientChecking}
+              disabled={!recipientNumber.trim()}
             />
           </View>
         )}
 
-        {step === 2 && (
-          <View style={styles.stepBody}>
-            <Card variant="surface">
-              <Text style={styles.label}>To</Text>
-              <Text style={styles.meta}>{recipient}</Text>
-            </Card>
-
-            <AuthInput
-              label="Amount"
-              value={amount}
-              onChangeText={(t) => {
-                const cleaned = t.replace(/[^0-9.]/g, '').replace(/(\..*)\./g, '$1');
-                setAmount(cleaned);
-                setError(null);
-              }}
-              placeholder="0.00"
-              keyboardType="decimal-pad"
-              autoCapitalize="none"
-              autoCorrect={false}
-              error={amount.length > 0 ? showAmountError : null}
-              accessibilityHint="Amount in taka to send"
-            />
-            <Text style={styles.helper}>Available: {formatBDT(account.balance)}</Text>
-
-            <AuthInput
-              label="Note (optional)"
-              value={note}
-              onChangeText={setNote}
-              placeholder="What's this for?"
-              autoCapitalize="sentences"
-            />
-
-            <FormErrorBanner message={error} />
-
-            <View style={styles.btnRow}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Back"
-                onPress={() => setStep(1)}
-                style={({ pressed }) => [styles.btnGhost, pressed && styles.pressed]}
-              >
-                <Text style={styles.btnGhostLabel}>Back</Text>
-              </Pressable>
-              <View style={{ flex: 1 }}>
-                <AuthButton
-                  title="Continue"
-                  onPress={() => setStep(3)}
-                  disabled={!canContinueFromAmount}
-                />
+        {/* STEP 2: Amount & Details */}
+        {step === 2 && recipientInfo && (
+          <View style={styles.stepContainer}>
+            {/* Verified Recipient Preview Card (FR-TRF-02, TC-21) */}
+            <Card style={styles.recipientCard}>
+              <View style={styles.recipientHeader}>
+                <View style={styles.verifiedIconPlate}>
+                  <Text style={styles.verifiedIcon}>✓</Text>
+                </View>
+                <View style={styles.recipientMeta}>
+                  <Text style={styles.recipientName}>{recipientInfo.abbreviated_name}</Text>
+                  <Text style={styles.recipientNumber}>{recipientInfo.masked_account_number}</Text>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    setStep(1);
+                    setRecipientInfo(null);
+                  }}
+                  style={styles.changeBtn}
+                >
+                  <Text style={styles.changeBtnText}>Change</Text>
+                </Pressable>
               </View>
-            </View>
-          </View>
-        )}
 
-        {step === 3 && (
-          <View style={styles.stepBody}>
-            <Card variant="surface">
-              <Text style={styles.label}>Recipient</Text>
-              <Text style={styles.meta}>{recipient}</Text>
-            </Card>
-            <Card variant="surface">
-              <Text style={styles.label}>Amount</Text>
-              <Money value={Number(amount)} size="large" />
-              {note.trim() ? (
-                <>
-                  <Text style={[styles.label, { marginTop: spacing.sm }]}>Note</Text>
-                  <Text style={styles.meta}>{note.trim()}</Text>
-                </>
-              ) : null}
-            </Card>
-            <FormErrorBanner message={error} />
-            <View style={styles.btnRow}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Back"
-                onPress={() => setStep(2)}
-                style={({ pressed }) => [styles.btnGhost, pressed && styles.pressed]}
-              >
-                <Text style={styles.btnGhostLabel}>Back</Text>
-              </Pressable>
-              <View style={{ flex: 1 }}>
-                <AuthButton title="Send money" onPress={() => setShowConfirm(true)} />
+              <View style={styles.branchRow}>
+                <Text style={styles.branchLabel}>Branch:</Text>
+                <Text style={styles.branchValue}>
+                  {recipientInfo.branch_name} ({recipientInfo.district})
+                </Text>
               </View>
+            </Card>
+
+            <View style={styles.inputGap}>
+              <AuthInput
+                label="Amount (৳)"
+                placeholder="0.00"
+                value={amount}
+                onChangeText={setAmount}
+                keyboardType="decimal-pad"
+                error={
+                  !amountValidation.ok && amount.length > 0
+                    ? amountValidation.message
+                    : isOverBalance
+                    ? 'Amount exceeds available balance'
+                    : null
+                }
+              />
             </View>
+
+            {amountValidation.ok && !isOverBalance && (
+              <View style={styles.remainingBox}>
+                <Text style={styles.remainingText}>
+                  Remaining Balance: <Text style={styles.remainingBold}>{formatBDT(remainingBalance)}</Text>
+                </Text>
+                <Text style={styles.feeNotice}>Transfer Fee: ৳0.00 (Zero Fee)</Text>
+              </View>
+            )}
+
+            <View style={styles.inputGap}>
+              <AuthInput
+                label="Note / Reference (Optional)"
+                placeholder="e.g. Dinner share, Project payment"
+                value={note}
+                onChangeText={setNote}
+                maxLength={60}
+              />
+            </View>
+
+            <AuthButton
+              title="Review Transfer"
+              onPress={handleOpenConfirm}
+              disabled={!amountValidation.ok || isOverBalance}
+            />
           </View>
         )}
       </ScrollView>
 
+      {/* Confirmation Dialog (FR-TRF-04) */}
       <ConfirmDialog
         visible={showConfirm}
-        title="Confirm transfer"
-        message={`You are about to send ${formatAmount(amount)} to account ${recipient.trim()}.`}
-        confirmLabel="Confirm transfer"
+        title="Confirm Transfer"
+        message={`Are you sure you want to send ${formatBDT(amountNum)} to ${recipientInfo?.abbreviated_name} (${recipientInfo?.masked_account_number}) at ${recipientInfo?.branch_name}?`}
+        confirmLabel="Send Money"
         loading={submitting}
         onConfirm={handleConfirmTransfer}
-        onCancel={() => (submitting ? null : setShowConfirm(false))}
+        onCancel={() => setShowConfirm(false)}
       />
     </SafeAreaView>
   );
 }
 
-function formatAmount(raw: string): string {
-  const v = isValidAmountInput(raw);
-  return v.ok ? `৳${Number(raw).toFixed(2)}` : '৳0.00';
-}
-
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
-  body: { flex: 1, padding: spacing.lg },
-  scroll: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xl,
+  safe: {
+    flex: 1,
+    backgroundColor: colors.background,
   },
-  stepBody: {
+  scroll: {
+    padding: spacing.md,
     gap: spacing.md,
   },
-  label: {
-    fontSize: typography.label.size,
-    color: colors.textMuted,
-    marginBottom: spacing.xs,
+  body: {
+    flex: 1,
+    padding: spacing.md,
+    justifyContent: 'center',
   },
-  meta: {
-    fontSize: typography.body.size,
-    color: colors.text,
+  sourceCard: {
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  sourceLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 4,
+    textTransform: 'uppercase',
     fontWeight: '600',
-    marginBottom: spacing.xs,
   },
-  helper: {
-    fontSize: typography.helper.size,
-    color: colors.textMuted,
-    marginTop: -spacing.sm,
+  sourceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  btnRow: {
+  sourceNumber: {
+    fontSize: typography.body.size,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  sourceBranch: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  balanceRight: {
+    alignItems: 'flex-end',
+  },
+  balanceCaption: {
+    fontSize: 11,
+    color: colors.textSecondary,
+  },
+  stepContainer: {
+    gap: spacing.md,
+  },
+  stepTitle: {
+    fontSize: typography.title.size,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  stepSubtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    lineHeight: 20,
+    marginTop: -8,
+  },
+  recipientCard: {
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  recipientHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    marginBottom: spacing.xs,
   },
-  btnGhost: {
-    minHeight: 52,
-    paddingHorizontal: spacing.md,
+  verifiedIconPlate: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.successLight ?? '#E6F4EA',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+  },
+  verifiedIcon: {
+    color: colors.success,
+    fontWeight: '700',
+  },
+  recipientMeta: {
+    flex: 1,
+  },
+  recipientName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  recipientNumber: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  changeBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  changeBtnText: {
+    fontSize: 13,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  branchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  branchLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginRight: 6,
+  },
+  branchValue: {
+    fontSize: 12,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  inputGap: {
+    marginTop: spacing.xs,
+  },
+  remainingBox: {
+    backgroundColor: colors.primaryLight,
+    padding: spacing.sm + 2,
     borderRadius: 10,
+    marginTop: -spacing.xs,
+  },
+  remainingText: {
+    fontSize: 13,
+    color: colors.primaryDark,
+  },
+  remainingBold: {
+    fontWeight: '700',
+  },
+  feeNotice: {
+    fontSize: 12,
+    color: colors.primaryDark,
+    marginTop: 2,
+    opacity: 0.85,
+  },
+  receiptScroll: {
+    padding: spacing.lg,
+    gap: spacing.lg,
+  },
+  receiptCard: {
+    backgroundColor: colors.surface,
+    padding: spacing.lg,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
+    gap: spacing.md,
+  },
+  successIconPlate: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.successLight ?? '#E6F4EA',
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  btnGhostLabel: {
-    color: colors.text,
-    fontSize: typography.body.size + 1,
-    fontWeight: '600',
+  successIcon: {
+    fontSize: 28,
+    color: colors.success,
+    fontWeight: '700',
   },
-  pressed: { opacity: 0.85 },
+  receiptTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  receiptDetails: {
+    width: '100%',
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    gap: 10,
+  },
+  receiptRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  receiptLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  receiptValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  educationalBadge: {
+    backgroundColor: '#F3F4F6',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginTop: spacing.xs,
+  },
+  educationalText: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
 });

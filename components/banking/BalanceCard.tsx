@@ -58,7 +58,10 @@ export function BalanceCard({ account, hidden = false, onToggleHide }: Props) {
         <View style={styles.rowBottom}>
           <View>
             <Text style={styles.accountLabel}>Savings account</Text>
-            <Text style={styles.accountNumber}>{account?.account_number ?? '—'}</Text>
+            <Text style={styles.accountNumber} numberOfLines={1}>
+              {account?.account_number ?? '—'}
+              {account?.branch?.name ? ` • ${account.branch.name}` : ''}
+            </Text>
           </View>
           {isBlocked ? (
             <View style={[styles.badge, styles.badgeBlocked]}>

@@ -31,7 +31,10 @@ export function AccountCard({ account }: Props) {
         </View>
         <View style={styles.middle}>
           <Text style={styles.title}>Savings Account</Text>
-          <Text style={styles.meta}>{maskAccountNumber(account.account_number)}</Text>
+          <Text style={styles.meta} numberOfLines={1}>
+            {maskAccountNumber(account.account_number)}
+            {account.branch?.name ? ` • ${account.branch.name}` : ''}
+          </Text>
         </View>
       </View>
       <View style={styles.right}>

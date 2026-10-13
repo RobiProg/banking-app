@@ -139,11 +139,11 @@ export default function TransactionDetailsScreen() {
             <InfoRow
               label="Type"
               value={
-                transaction.transaction_type === 'deposit'
-                  ? 'Card payment / deposit'
-                  : transaction.transaction_type === 'withdrawal'
-                  ? 'Withdrawal'
-                  : 'Transfer'
+                transaction.type === 'deposit' || transaction.transaction_type === 'deposit'
+                  ? 'Simulated branch cash deposit'
+                  : transaction.type === 'withdrawal' || transaction.transaction_type === 'withdrawal'
+                  ? 'Simulated withdrawal'
+                  : 'Internal SmartBank transfer'
               }
             />
             <Divider />
@@ -153,14 +153,14 @@ export default function TransactionDetailsScreen() {
             />
             <Divider />
             <InfoRow label="Amount" value={`৳${Number(transaction.amount).toFixed(2)}`} />
+            <Divider />
+            <InfoRow label="Reference" value={transaction.reference || shortId(transaction.id)} />
             {transaction.description ? (
               <>
                 <Divider />
                 <InfoRow label="Description" value={transaction.description} />
               </>
             ) : null}
-            <Divider />
-            <InfoRow label="Transaction ID" value={shortId(transaction.id)} />
           </Card>
         </View>
 

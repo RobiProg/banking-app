@@ -67,6 +67,10 @@ export default function AccountDetailScreen() {
             <Divider />
             <InfoRow label="Account number" value={maskAccountNumber(account.account_number)} />
             <Divider />
+            <InfoRow label="Branch" value={account.branch ? `${account.branch.name}` : 'Dhaka Main'} />
+            <Divider />
+            <InfoRow label="District" value={account.branch?.district ?? 'Dhaka'} />
+            <Divider />
             <InfoRow label="Account type" value={capitalise(account.account_type)} />
             <Divider />
             <InfoRow label="Status" value={capitalise(account.status)} />

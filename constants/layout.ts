@@ -45,6 +45,7 @@ export const typography = {
   label: { size: 13, weight: '600' as const },
   body: { size: 15, weight: '400' as const },
   helper: { size: 12, weight: '400' as const },
+  caption: { size: 12, weight: '400' as const },
 } as const;
 
 export type TypographyRole = keyof typeof typography;

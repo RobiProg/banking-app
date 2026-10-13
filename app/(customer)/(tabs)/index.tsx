@@ -107,9 +107,9 @@ export default function CustomerHomeScreen() {
           ) : transactions.length === 0 ? (
             <EmptyState
               title="No transactions yet"
-              message="Deposit or receive money to see your activity here."
-              ctaLabel="Make a deposit"
-              onPressCta={() => router.push(ROUTES.deposit)}
+              message="Send or receive transfers to see your banking activity here."
+              ctaLabel="Send money"
+              onPressCta={() => router.push(ROUTES.sendMoney)}
             />
           ) : (
             <View>

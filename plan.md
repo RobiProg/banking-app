@@ -283,30 +283,30 @@ $$;
   - Add `adminListAuditLogs(limit, offset)`.
 
 ### Phase 4: Customer Interface Transformation
-- [ ] Customer Dashboard ([app/(customer)/(tabs)/index.tsx](file:///c:/banking-app/app/(customer)/(tabs)/index.tsx)):
+- [x] Customer Dashboard ([app/(customer)/(tabs)/index.tsx](file:///c:/banking-app/app/(customer)/(tabs)/index.tsx)):
   - Display user greeting, available balance with hide/reveal toggle.
   - Display account card with **Masked Account Number** and **Assigned Branch / District** (FR-ACC-03, FR-BR-01).
   - Update [components/banking/QuickActions.tsx](file:///c:/banking-app/components/banking/QuickActions.tsx): Replace "Deposit" button with "Withdraw" (simulated), "Send Money", "My Account", and "History".
-- [ ] Customer Send Money Screen ([app/(customer)/send-money.tsx](file:///c:/banking-app/app/(customer)/send-money.tsx)):
+- [x] Customer Send Money Screen ([app/(customer)/send-money.tsx](file:///c:/banking-app/app/(customer)/send-money.tsx)):
   - **Step 1**: Enter Recipient Account Number -> Real-time backend lookup via `lookup_recipient` -> Renders preview with abbreviated name (`Md. R***`), masked account (`••••••4821`), and branch name/district. Shows immediate error if account not found or inactive.
   - **Step 2**: Enter Amount (2 decimal places limit, balance warning) + Optional Note.
   - **Step 3**: Confirmation Sheet displaying full breakdown, zero transfer fee notice (BR-07), and educational simulation notice. Generates UUID `idempotency_key` upon sheet display.
   - **Step 4**: Submission calling `app_transfer`. Displays success receipt modal with unique reference (`TXN-YYYYMMDD-XXXX`), sender/receiver details, timestamp, and "Done" navigation.
-- [ ] Customer Simulated Withdrawal ([app/(customer)/withdraw.tsx](file:///c:/banking-app/app/(customer)/withdraw.tsx)):
+- [x] Customer Simulated Withdrawal ([app/(customer)/withdraw.tsx](file:///c:/banking-app/app/(customer)/withdraw.tsx)):
   - Clear banner: *"Simulated Withdrawal: This is an educational demonstration and does not dispense physical cash."* (FR-WD-05).
   - Validates amount against available balance.
   - Generates UUID `idempotency_key` and calls `app_withdraw`.
   - Displays success screen with generated transaction reference and new balance.
-- [ ] Decommission Customer Deposit:
+- [x] Decommission Customer Deposit:
   - Remove `app/(customer)/deposit.tsx` or replace with an informational screen directing the customer to an authorized branch teller (FR-DEP-01).
-- [ ] Transaction History & Details ([app/(customer)/(tabs)/transactions.tsx](file:///c:/banking-app/app/(customer)/(tabs)/transactions.tsx), [app/(customer)/transaction-details.tsx](file:///c:/banking-app/app/(customer)/transaction-details.tsx)):
+- [x] Transaction History & Details ([app/(customer)/(tabs)/transactions.tsx](file:///c:/banking-app/app/(customer)/(tabs)/transactions.tsx), [app/(customer)/transaction-details.tsx](file:///c:/banking-app/app/(customer)/transaction-details.tsx)):
   - Filter tabs: All, Transfers, Withdrawals, Deposits (FR-TXN-02).
   - Details screen: Unique transaction reference, transaction type pill, amount with +/- indicator, counterparty masked account, counterparty branch name, description, timestamp, and audit integrity indicator.
-- [ ] Notifications ([app/(customer)/(tabs)/notifications.tsx](file:///c:/banking-app/app/(customer)/(tabs)/notifications.tsx)):
+- [x] Notifications ([app/(customer)/(tabs)/notifications.tsx](file:///c:/banking-app/app/(customer)/(tabs)/notifications.tsx)):
   - Unread badge counter.
   - Live notifications for incoming transfers, sent transfers, withdrawals, and teller deposits.
   - Mark single/all as read.
-- [ ] Customer Profile ([app/(customer)/(tabs)/profile.tsx](file:///c:/banking-app/app/(customer)/(tabs)/profile.tsx)):
+- [x] Customer Profile ([app/(customer)/(tabs)/profile.tsx](file:///c:/banking-app/app/(customer)/(tabs)/profile.tsx)):
   - View full name, email, phone, role, bank account number, and assigned branch.
   - Edit permitted fields only: Full Name and Phone. Account number, balance, status, and role are non-editable (FR-PROF-02).
 

@@ -153,6 +153,11 @@ export default function CustomerProfileTab() {
               <Text style={styles.balanceLabel}>Current balance</Text>
               <Money value={account.balance} size="large" />
               <Text style={styles.balanceMeta}>{account.account_number}</Text>
+              {account.branch ? (
+                <Text style={styles.branchMeta}>
+                  Branch: {account.branch.name} ({account.branch.district})
+                </Text>
+              ) : null}
             </View>
           </Card>
         ) : null}
@@ -301,6 +306,7 @@ const styles = StyleSheet.create({
   balanceRow: { gap: 2 },
   balanceLabel: { fontSize: typography.label.size, color: colors.textMuted },
   balanceMeta: { fontSize: typography.helper.size, color: colors.textMuted, marginTop: 2 },
+  branchMeta: { fontSize: typography.helper.size, color: colors.primaryDark, marginTop: 2, fontWeight: '600' },
   section: { marginTop: spacing.md },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
   row: {
