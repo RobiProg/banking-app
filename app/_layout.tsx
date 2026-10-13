@@ -1,3 +1,4 @@
+import React from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { STACK_DEFAULTS } from '../constants/layout';
@@ -9,7 +10,8 @@ export default function RootLayout() {
       <Stack screenOptions={STACK_DEFAULTS}>
         <Stack.Screen name="index" />
         <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(app)" />
+        <Stack.Screen name="(customer)" />
+        <Stack.Screen name="(admin)" />
       </Stack>
     </>
   );

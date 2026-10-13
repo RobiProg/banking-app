@@ -8,7 +8,7 @@ import { ScreenContainer } from '../../components/auth/ScreenContainer';
 import { colors } from '../../constants/colors';
 import { spacing, typography } from '../../constants/layout';
 import { ROUTES } from '../../constants/routes';
-import { signIn } from '../../services/auth';
+import { getSessionWithProfile, signIn } from '../../services/auth';
 import {
   clearFieldError,
   isNonEmpty,
@@ -55,13 +55,21 @@ export default function LoginScreen() {
 
     setLoading(true);
     const result = await signIn({ email, password });
-    setLoading(false);
 
     if (result.errorMessage) {
+      setLoading(false);
       setFormError(result.errorMessage);
       return;
     }
-    router.replace(ROUTES.app);
+
+    const lookup = await getSessionWithProfile();
+    setLoading(false);
+
+    if (lookup.profile?.role === 'admin') {
+      router.replace(ROUTES.adminDashboard);
+    } else {
+      router.replace(ROUTES.customer);
+    }
   }
 
   return (

@@ -6,17 +6,24 @@ import { ScreenContainer } from '../components/auth/ScreenContainer';
 import { colors } from '../constants/colors';
 import { spacing, typography } from '../constants/layout';
 import { ROUTES } from '../constants/routes';
-import { getSession } from '../services/auth';
+import { getSessionWithProfile } from '../services/auth';
 
 const MIN_VISIBLE_MS = 2000;
 const APP_VERSION = '1.0.0';
 
-// Keep the native splash on screen until we explicitly hide it. Without
-// this, the native splash can disappear before our JS splash mounts.
 ExpoSplashScreen.preventAutoHideAsync().catch(() => {
-  // Safe to ignore — older Expo Go builds ignore this call.
+  // ignore — older Expo Go builds ignore this call.
 });
 
+/**
+ * Splash / route-by-role screen.
+ *   1. Wait at least MIN_VISIBLE_MS.
+ *   2. Check the session.
+ *   3. If signed in, load the profile and route by role.
+ *      - admins → /(admin)
+ *      - customers → /(customer)
+ *   4. If signed out → /(auth)/login.
+ */
 export default function SplashScreen() {
   const router = useRouter();
   const startedAtRef = useRef<number>(Date.now());
@@ -26,19 +33,33 @@ export default function SplashScreen() {
     let cancelled = false;
 
     async function decideRoute() {
-      const session = await getSession();
+      const lookup = await getSessionWithProfile();
       const elapsed = Date.now() - startedAtRef.current;
       const wait = Math.max(0, MIN_VISIBLE_MS - elapsed);
 
       timeoutRef.current = setTimeout(async () => {
         if (cancelled) return;
-        // Hand control from the native splash to our JS splash.
         try {
           await ExpoSplashScreen.hideAsync();
         } catch {
           // ignore — splash module may not be available in Expo Go sandbox.
         }
-        router.replace(session ? ROUTES.app : ROUTES.login);
+        if (!lookup.user) {
+          router.replace(ROUTES.login);
+          return;
+        }
+        if (!lookup.profile) {
+          // Profile row missing or query failed — send to login so they
+          // can try again. The error message will appear in the next
+          // screen via the (customer)/_layout.tsx gate.
+          router.replace(ROUTES.login);
+          return;
+        }
+        if (lookup.profile.role === 'admin') {
+          router.replace(ROUTES.adminDashboard);
+        } else {
+          router.replace(ROUTES.customer);
+        }
       }, wait);
     }
 
@@ -75,15 +96,8 @@ export default function SplashScreen() {
 }
 
 const styles = StyleSheet.create({
-  fill: {
-    flex: 1,
-    justifyContent: 'space-between',
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  fill: { flex: 1, justifyContent: 'space-between' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   card: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -109,10 +123,10 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   appName: {
-    fontSize: typography.title.size + 4, // 32
+    fontSize: typography.title.size + 4,
     fontWeight: typography.title.weight,
     color: colors.text,
-    marginBottom: spacing.xs + 2, // 6
+    marginBottom: spacing.xs + 2,
     letterSpacing: 0.3,
   },
   tagline: {
@@ -121,7 +135,7 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   loaderWrap: {
-    marginTop: spacing.xl + spacing.xs, // 36
+    marginTop: spacing.xl + spacing.xs,
     marginBottom: spacing.lg,
   },
   versionTag: {

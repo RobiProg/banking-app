@@ -1,1203 +1,412 @@
-# SmartBank - AI Agent Implementation Plan
+# SmartBank — Comprehensive Project Implementation Plan (SRS v2.1 Alignment)
 
-## 1. Project Overview
-
-Build **SmartBank**, a basic digital banking mobile application for a university App Development project.
-
-### Core Stack
-
-- **Mobile:** React Native
-- **Development:** Expo
-- **Backend:** Supabase
-- **Database:** PostgreSQL through Supabase
-- **Authentication:** Supabase Auth
-- **Security:** Supabase Row Level Security (RLS)
-- **Server-side financial operations:** PostgreSQL functions / Supabase RPC
-- **Version control:** Git
-
-### Project Goal
-
-Create a clean, functional, educational banking simulation with:
-
-- Customer registration and login
-- Customer profile
-- Bank account
-- Balance viewing
-- Deposit
-- Withdrawal
-- Money transfer
-- Transaction history
-- Notifications
-- Admin dashboard
-- User/account/transaction management
-
-> This is an educational simulation. It must NOT process real money or connect to a real banking institution.
+**Companion Documents:**
+- Software Requirements Specification (SRS) v2.1 (*Realistic Money Flow and Branch-Aware Transfers*)
+- SmartBank Technical Design Document (`design.md`)
+- Google Stitch Design Prompt Specification (`DESIGN_PROMPT.md`)
 
 ---
 
-# 2. Scope Rules
+## 1. Executive Summary & Architectural Overview
 
-## Must Implement
+SmartBank is an educational digital banking simulation built for a university App Development project. It simulates core retail banking concepts—branch-aware accounts, internal peer-to-peer transfers, simulated ATM/branch withdrawals, teller branch cash deposits, transaction auditing, and administrative management—without connecting to real banking rails, payment gateways, or handling real money.
 
-1. Authentication
-2. Customer profiles
-3. Bank accounts
-4. Balance
-5. Deposit
-6. Withdrawal
-7. Send money
-8. Transaction history
-9. Transaction details
-10. Notifications
-11. Admin authentication
-12. Admin dashboard
-13. User management
-14. Account management
-15. Transaction monitoring
-16. Proper database security with RLS
-17. Server-side/atomic transaction processing
-
-## Do NOT Implement in the Initial Version
-
-Do not add:
-
-- Loans
-- Credit cards
-- Virtual cards
-- Mobile recharge
-- Utility bill payment
-- Investments
-- Cryptocurrency
-- QR payments
-- Real payment gateways
-- Real bank API integration
-- AI fraud detection
-- Complex KYC
-- Complex biometric authentication
-- Chat/support system
-
-These may be listed as future enhancements but should not be implemented unless explicitly requested.
-
----
-
-# 3. Development Principles
-
-The AI agent must follow these principles:
-
-1. Prefer simple, maintainable code.
-2. Do not over-engineer the application.
-3. Follow the existing project structure if the repository already contains one.
-4. Do not replace working code unnecessarily.
-5. Keep components reusable.
-6. Keep business logic separate from UI where practical.
-7. Never trust client-side validation for financial operations.
-8. Never directly modify account balances from untrusted client-side logic.
-9. Use Supabase RLS for data access protection.
-10. Use PostgreSQL functions/RPC for financial operations.
-11. Handle loading, success, empty, and error states.
-12. Use clear user-facing error messages.
-13. Do not expose Supabase service-role keys in the React Native application.
-14. Never hardcode passwords, secrets, API keys, or private credentials.
-15. Keep the UI suitable for a university project: clean, modern, and understandable.
-
----
-
-# 4. Recommended Project Structure
-
-Use a structure similar to:
+### Core Stack & System Architecture
 
 ```text
-SmartBank/
-├── app/
-│   ├── (auth)/
-│   │   ├── login.tsx
-│   │   └── register.tsx
-│   │
-│   ├── (customer)/
-│   │   ├── index.tsx
-│   │   ├── account.tsx
-│   │   ├── deposit.tsx
-│   │   ├── withdraw.tsx
-│   │   ├── send-money.tsx
-│   │   ├── transactions.tsx
-│   │   ├── transaction-details.tsx
-│   │   ├── notifications.tsx
-│   │   └── profile.tsx
-│   │
-│   └── (admin)/
-│       ├── index.tsx
-│       ├── users.tsx
-│       ├── accounts.tsx
-│       └── transactions.tsx
-│
-├── components/
-│   ├── common/
-│   ├── forms/
-│   ├── banking/
-│   └── admin/
-│
-├── lib/
-│   ├── supabase.ts
-│   └── constants.ts
-│
-├── services/
-│   ├── auth.ts
-│   ├── accounts.ts
-│   ├── transactions.ts
-│   └── notifications.ts
-│
-├── hooks/
-│
-├── types/
-│
-├── utils/
-│
-├── supabase/
-│   ├── migrations/
-│   └── seed.sql
-│
-├── assets/
-│
-├── .env
-├── .gitignore
-├── package.json
-└── plan.md
+┌─────────────────────────────────────────────────────────────┐
+│             React Native + Expo Client (Mobile)             │
+│                                                             │
+│   UI Screens ──► Feature Hooks ──► Typed RPC / Services     │
+│   (Inter / Outfit UI, Glassmorphism, Tabular Nums for ৳)    │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ HTTPS (Public Anon Key + JWT)
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 Supabase Backend & PostgreSQL               │
+│                                                             │
+│  • PostgREST : Read-only queries strictly bounded by RLS   │
+│  • RPCs      : Server-side SECURITY DEFINER atomic routines │
+│                (app_transfer, app_withdraw, app_deposit,    │
+│                 lookup_recipient) with SELECT FOR UPDATE    │
+│  • Tables    : profiles, branches, accounts, transactions,  │
+│                notifications, audit_logs                    │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-If the project uses React Navigation instead of Expo Router, adapt the navigation structure while preserving the same logical screens.
+- **Client Framework**: React Native + Expo (v57) with Expo Router (file-based navigation).
+- **Backend & Database**: Supabase (PostgreSQL 15+, Supabase Auth, Row Level Security, PL/pgSQL RPCs).
+- **Security Boundary**: The client is never trusted for financial operations, balances, or role permissions. Balance-changing logic lives entirely in server-side PostgreSQL functions (`SECURITY DEFINER`). The Supabase service-role key is never included in the mobile client.
+- **Currency**: Bangladeshi Taka (৳), stored as `NUMERIC(18,2)` (never floating point).
 
 ---
 
-# 5. Phase 0 - Inspect the Existing Project
+## 2. Key Scope & Business Rules (SRS v2.1 & Design Document)
 
-Before making changes:
-
-1. Inspect the repository.
-2. Identify whether the project uses Expo or bare React Native.
-3. Identify the existing navigation solution.
-4. Identify installed dependencies.
-5. Check whether Supabase is already configured.
-6. Check whether TypeScript or JavaScript is being used.
-7. Do not convert JavaScript to TypeScript or vice versa unless explicitly requested.
-8. Preserve existing working configuration.
-
-After inspection, document any important existing decisions before implementation.
-
----
-
-# 6. Phase 1 - Project Setup
-
-## Tasks
-
-- Configure React Native/Expo project.
-- Install/configure Supabase client.
-- Create environment configuration.
-- Create Supabase client module.
-- Add `.env` to `.gitignore`.
-- Verify the app can connect to Supabase.
-
-### Environment
-
-Use public Supabase client configuration appropriate for a mobile client.
-
-Never place the Supabase service-role key in the mobile application.
-
-### Acceptance Criteria
-
-- App starts successfully.
-- Supabase client initializes without errors.
-- No secret credentials are committed to Git.
+| Rule ID | Rule Summary | Implementation Mechanism |
+| :--- | :--- | :--- |
+| **BR-01 / FR-DEP-01** | **No Customer Self-Deposit** | Customers cannot type an amount and increase their own balance. Customer deposit UI is removed. |
+| **BR-02 / FR-TRF-01** | **Internal Transfers Only** | Customer money movement is strictly peer-to-peer between valid SmartBank accounts. |
+| **BR-03 / FR-TRF-02** | **Branch-Aware Recipient Lookup** | Sender enters account number; backend looks up recipient returning *abbreviated name* (e.g. `Md. R***`), masked account number (`••••••4821`), branch name, and district. Full legal name is never exposed (blunting enumeration). |
+| **BR-04 / FR-ACC-04** | **Eligibility & Status Control** | Both sender and recipient must have `active` status. Inactive or blocked accounts cannot send, receive, withdraw, or deposit. |
+| **BR-05 / FR-TRF-13** | **Strict Amount & Balance Validation** | Amount must be positive, max 2 decimal places (`round(amount, 2) = amount`), within configurable per-transfer limit, and sender balance must be >= amount. |
+| **BR-06 / BR-07** | **Zero Transfer Fee** | Sender debited and recipient credited exact equal amounts. |
+| **BR-08 / NFR-INT-02** | **Idempotent Operations** | Every money action generates a client UUID `idempotency_key` on confirm sheet open. Replaying an identical key returns the original transaction record without double processing. |
+| **BR-10 / FR-DEP-02** | **Staff-Only Branch Deposits** | Simulated cash deposits can only be performed by authorized staff (`teller` or `admin`) recording receiving branch, operator ID, and cash confirmation. |
+| **BR-12 / FR-ACC-02** | **Single Account per User** | Each customer owns exactly one Savings account in v2.1. Self-transfers (`recipient = sender`) are rejected with `SELF_TRANSFER`. |
+| **FR-WD-05 / FR-WD-06** | **Simulated Withdrawals** | Customer withdrawal is simulated; UI explicitly clarifies no physical cash is dispensed. Atomically debits balance, logs audit record, and triggers notification. |
+| **FR-ADM-09 / TC-22** | **Role Provisioning Security** | Public registration defaults to `customer`. Elevated roles (`admin`, `teller`) are seeded in DB or granted by an existing admin via trusted server actions. Client cannot self-promote. |
 
 ---
 
-# 7. Phase 2 - Supabase Authentication
+## 3. Gap Analysis: Current Codebase vs. SRS v2.1 & design.md
 
-Use Supabase Auth.
+A comprehensive audit of the active repository reveals the following gaps to be addressed:
 
-## Customer Authentication
-
-Implement:
-
-- Register
-- Login
-- Logout
-- Session persistence
-- Authentication state handling
-
-Registration fields:
-
-```text
-Full Name
-Email
-Phone
-Password
-Confirm Password
 ```
+[!] Current Gap 1: Schema Inconsistencies
+    - Missing 'branches' and 'audit_logs' tables.
+    - 'accounts' table is missing 'branch_id' foreign key and uses numeric(15,2) instead of numeric(18,2).
+    - 'transactions' table uses 'transaction_type' instead of 'type', lacks 'reference', 'idempotency_key', 'branch_id', and 'initiated_by'.
+    - 'profiles' lacks 'teller' role enum.
+    - 'notifications' lacks 'related_transaction_id' foreign key.
 
-## Requirements
+[!] Current Gap 2: Insecure / Deprecated RPC Functions
+    - 'deposit_funds' allows customer self-deposit (violates BR-01 / FR-DEP-01).
+    - 'transfer_money' lacks idempotency checking, dead-lock prevention row ordering, audit logging, and branch association.
+    - Missing 'lookup_recipient' RPC returning minimal disclosure fields (abbreviated name, masked account, branch).
+    - Missing 'app_withdraw' and staff 'app_deposit' RPCs.
 
-- Validate required fields.
-- Validate email.
-- Validate password confirmation.
-- Handle duplicate email.
-- Handle invalid login.
-- Show loading state.
-- Show meaningful errors.
-
-## Acceptance Criteria
-
-A new user can:
-
-```text
-Register
-   ↓
-Authenticate
-   ↓
-Create profile
-   ↓
-Create bank account
-   ↓
-Open customer dashboard
+[!] Current Gap 3: Client UI Inconsistencies
+    - Customer QuickActions & navigation contains a "Deposit" button and 'app/(customer)/deposit.tsx' screen.
+    - 'send-money.tsx' does not show branch details or abbreviated recipient name preview.
+    - 'withdraw.tsx' lacks the required disclaimer stating no physical cash is dispensed.
+    - Missing Password Reset flow ('app/(auth)/reset-password.tsx') required by FR-AUTH-04 & TC-19.
+    - Admin dashboard lacks Branch Management ('branches.tsx') and Staff Branch Deposit ('deposit.tsx').
 ```
 
 ---
 
-# 8. Phase 3 - Database Schema
+## 4. Database Architecture & Migration Plan
 
-Create PostgreSQL tables in Supabase.
+A dedicated migration file `supabase/migrations/0007_srs_v2_alignment.sql` will be created to cleanly upgrade the schema and functions to the SRS v2.1 specification while preserving database integrity.
 
-## 8.1 profiles
+### 4.1 Schema DDL
 
-Fields:
+```sql
+-- 1. ENUMS
+do $$ begin
+  create type user_role as enum ('customer', 'teller', 'admin');
+exception when duplicate_object then null; end $$;
 
-```text
-id UUID PRIMARY KEY
-full_name TEXT NOT NULL
-email TEXT
-phone TEXT
-role TEXT NOT NULL DEFAULT 'customer'
-created_at TIMESTAMPTZ DEFAULT now()
+do $$ begin
+  create type account_status as enum ('active', 'inactive', 'blocked');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type txn_type as enum ('transfer', 'withdrawal', 'deposit');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type txn_status as enum ('completed', 'failed');
+exception when duplicate_object then null; end $$;
+
+-- 2. BRANCHES TABLE
+create table if not exists public.branches (
+  id            uuid primary key default gen_random_uuid(),
+  branch_code   text unique not null,
+  name          text not null,
+  district      text not null,
+  address       text,
+  routing_code  text,
+  is_active     boolean not null default true,
+  created_at    timestamptz not null default now()
+);
+
+-- 3. AUDIT LOGS TABLE
+create table if not exists public.audit_logs (
+  id             uuid primary key default gen_random_uuid(),
+  actor_user_id  uuid references public.profiles(id),
+  action         text not null,
+  target_type    text,
+  target_id      uuid,
+  metadata       jsonb,
+  created_at     timestamptz not null default now()
+);
+
+-- 4. ACCOUNTS TABLE ENHANCEMENTS
+alter table public.accounts
+  add column if not exists branch_id uuid references public.branches(id),
+  alter column balance type numeric(18,2);
+
+create unique index if not exists one_account_per_user on public.accounts(user_id);
+
+-- 5. TRANSACTIONS TABLE ENHANCEMENTS
+alter table public.transactions
+  add column if not exists reference text unique,
+  add column if not exists type txn_type not null default 'transfer',
+  add column if not exists branch_id uuid references public.branches(id),
+  add column if not exists initiated_by uuid references public.profiles(id),
+  add column if not exists idempotency_key text,
+  alter column amount type numeric(18,2);
+
+create unique index if not exists uniq_idempotency on public.transactions(idempotency_key)
+  where idempotency_key is not null;
+
+-- 6. NOTIFICATIONS ENHANCEMENTS
+alter table public.notifications
+  add column if not exists related_transaction_id uuid references public.transactions(id);
 ```
 
-Recommended role values:
+### 4.2 Reference Number Generator
 
-```text
-customer
-admin
+```sql
+create or replace function public.gen_reference()
+returns text language sql as $$
+  select 'TXN-' || to_char(now(), 'YYYYMMDD') || '-' || upper(substr(md5(random()::text || clock_timestamp()::text), 1, 8));
+$$;
 ```
 
-The `id` should reference the authenticated Supabase user.
+### 4.3 Server-Side Financial RPCs
+
+1. **`lookup_recipient(p_account_number text)`**:
+   - Validates format and account existence.
+   - Formats abbreviated name (e.g. `Md. R***`) from recipient profile.
+   - Masks account number (e.g. `••••••4821`).
+   - Retrieves recipient branch name & district.
+   - Verifies recipient account status is `active`.
+   - Returns `{ abbreviated_name, masked_account_number, account_type, branch_name, district, eligible }`.
+   - Never exposes full legal name or `user_id`.
+
+2. **`app_transfer(p_recipient_account_number text, p_amount numeric, p_description text, p_idempotency_key text)`**:
+   - **Step 0 (Idempotency)**: If `p_idempotency_key` exists in `transactions`, return that row immediately.
+   - **Step 1 (Amount validation)**: Ensure `p_amount > 0` and `p_amount = round(p_amount, 2)` and `p_amount <= 500000.00` (configurable limit).
+   - **Step 2 (Row locking)**: Lock sender and recipient account rows using `SELECT ... FOR UPDATE` in deterministic order (by `id`) to prevent deadlock.
+   - **Step 3 (Business rule assertions)**:
+     - Verify sender exists and `status = 'active'`.
+     - Verify recipient exists and `status = 'active'`.
+     - Verify `recipient.id <> sender.id` (`SELF_TRANSFER`).
+     - Verify `sender.balance >= p_amount` (`INSUFFICIENT_FUNDS`).
+   - **Step 4 (Atomic Ledger Update)**:
+     - Decrement sender balance: `balance = balance - p_amount`.
+     - Increment recipient balance: `balance = balance + p_amount`.
+   - **Step 5 (Audit & Notifications)**:
+     - Insert transaction row with `reference = gen_reference()`, `type = 'transfer'`, `status = 'completed'`, `initiated_by = auth.uid()`.
+     - Insert audit log row with action `transfer`.
+     - Insert notification for recipient (`Money received`) and sender (`Transfer sent`).
+     - Return completed transaction.
+
+3. **`app_withdraw(p_amount numeric, p_idempotency_key text)`**:
+   - Checks idempotency key.
+   - Validates amount (> 0, 2 decimal places, within daily/transaction limit).
+   - Locks caller account (`SELECT ... FOR UPDATE`).
+   - Verifies active status and sufficient balance.
+   - Debits balance: `balance = balance - p_amount`.
+   - Inserts transaction with `type = 'withdrawal'`, `sender_account_id = account.id`, `receiver_account_id = null`.
+   - Inserts audit log and in-app notification.
+
+4. **`app_deposit(p_target_account_number text, p_branch_id uuid, p_amount numeric, p_reference_note text, p_idempotency_key text)`**:
+   - Role check: Caller must have `role in ('teller', 'admin')` (raises `NOT_AUTHORIZED`).
+   - Checks idempotency key.
+   - Validates target account exists and is `active`.
+   - Validates branch exists and is `is_active = true`.
+   - Locks target account (`SELECT ... FOR UPDATE`).
+   - Credits balance: `balance = balance + p_amount`.
+   - Inserts transaction with `type = 'deposit'`, `sender_account_id = null`, `receiver_account_id = target.id`, `branch_id = p_branch_id`.
+   - Inserts audit log with actor ID, branch ID, and note.
+   - Inserts notification for recipient customer.
+
+5. **Revoke customer self-deposit**:
+   - Drop or deprecate `deposit_funds()` function.
+
+### 4.4 Row Level Security (RLS) Matrix
+
+| Table | SELECT | INSERT | UPDATE | DELETE |
+| :--- | :--- | :--- | :--- | :--- |
+| `profiles` | `id = auth.uid() OR is_admin()` | Internal Trigger Only | `id = auth.uid()` (phone, name only) | Admin Only |
+| `branches` | Authenticated users (`is_active = true` or admin) | Admin Only | Admin Only | Admin Only |
+| `accounts` | `user_id = auth.uid() OR is_admin()` | **NO CLIENT WRITE** (RPC / Trigger only) | **NO CLIENT WRITE** (RPC only) | Admin Only |
+| `transactions` | Involved in txn (`sender` or `receiver`) OR admin | **NO CLIENT WRITE** (RPC only) | **NO CLIENT WRITE** | **NO DELETE** |
+| `notifications`| `user_id = auth.uid()` | RPC / System trigger | `user_id = auth.uid()` (`is_read` flip only) | `user_id = auth.uid()` |
+| `audit_logs` | Admin Only (`is_admin()`) | **NO CLIENT WRITE** (RPC only) | **NO CLIENT WRITE** | **NO DELETE** |
 
 ---
 
-## 8.2 accounts
+## 5. Implementation Phases & Step-by-Step Roadmap
 
-Fields:
+### Phase 1: Database Migration & Seed Data
+- [x] Create `supabase/migrations/0007_srs_v2_alignment.sql` containing:
+  - Tables: `branches`, `audit_logs`.
+  - Column updates for `accounts`, `transactions`, `notifications`, `profiles`.
+  - Stored procedures: `gen_reference()`, `lookup_recipient()`, `app_transfer()`, `app_withdraw()`, `app_deposit()`, `ensure_user_profile()`.
+  - Complete RLS policies according to `design.md §4`.
+  - Trigger updates ensuring new signups are linked to a default or selected active branch.
+- [x] Create/Update demo seed data in `supabase/seed.sql`:
+  - 8 realistic Bangladesh district branches (e.g. Dhaka Motijheel Main, Chittagong Agrabad, Sylhet Zindabazar, Rajshahi Saheb Bazar, Khulna KDA, Bogura, Barishal, Comilla).
+  - 2 demo customer accounts with starting balances (e.g., Customer A: ৳50,000, Customer B: ৳15,000).
+  - 1 demo administrator/teller account (`admin@smartbank.test`).
 
-```text
-id UUID PRIMARY KEY
-user_id UUID NOT NULL
-account_number TEXT UNIQUE NOT NULL
-account_type TEXT NOT NULL DEFAULT 'savings'
-balance NUMERIC(15,2) NOT NULL DEFAULT 0
-status TEXT NOT NULL DEFAULT 'active'
-created_at TIMESTAMPTZ DEFAULT now()
-```
+### Phase 2: TypeScript Types & Core Infrastructure
+- [ ] Update [types/db.ts](file:///c:/banking-app/types/db.ts):
+  - Add `Branch` and `AuditLog` types.
+  - Update `UserRole` to `'customer' | 'teller' | 'admin'`.
+  - Update `Account` with `branch_id` and optional joined `branch: Branch`.
+  - Update `Transaction` with `reference`, `type` (`transfer` | `withdrawal` | `deposit`), `branch_id`, `initiated_by`, `idempotency_key`.
+  - Add `RecipientLookupInfo` type (`abbreviated_name`, `masked_account_number`, `branch_name`, `district`, `account_type`, `eligible`).
+- [ ] Update [utils/format.ts](file:///c:/banking-app/utils/format.ts):
+  - Ensure Bangladeshi Taka (৳) formatting helper `formatBDT` formats standard Bengali/international comma groupings (e.g. `৳ 25,000.00`).
+  - Add account number masking helper: `maskAccountNumber(acc: string) => string` (`••••••4821`).
+  - Add name abbreviation helper: `abbreviateName(name: string) => string` (`Md. R***`).
+  - Add strict 2-decimal amount parser and validator `isValidBankingAmount(val: string): { ok: boolean; amount?: number; error?: string }`.
+- [ ] Update [constants/routes.ts](file:///c:/banking-app/constants/routes.ts):
+  - Add route for `resetPassword`, `adminBranches`, `adminDeposit`.
+  - Remove customer `deposit` route.
 
-Recommended account statuses:
+### Phase 3: Service Layer Overhaul
+- [ ] Update [services/auth.ts](file:///c:/banking-app/services/auth.ts):
+  - Add `resetPasswordForEmail(email: string)`.
+  - Update `signUp` to optionally accept `branchId` in metadata for branch assignment.
+- [ ] Update [services/accounts.ts](file:///c:/banking-app/services/accounts.ts):
+  - Add `lookupRecipient(accountNumber: string)` calling `lookup_recipient` RPC.
+  - Update `getMyAccount()` to join branch details (`branches(name, district, branch_code)`).
+- [ ] Update [services/transactions.ts](file:///c:/banking-app/services/transactions.ts):
+  - Replace `transferMoney` with `appTransfer({ recipientAccountNumber, amount, description, idempotencyKey })` calling `app_transfer` RPC.
+  - Replace `withdrawFunds` with `appWithdraw({ amount, idempotencyKey })` calling `app_withdraw` RPC.
+  - Remove customer `depositFunds` export.
+  - Add friendly error code mapping for all stable Postgres RPC exceptions (`INSUFFICIENT_FUNDS`, `RECIPIENT_NOT_FOUND`, `SELF_TRANSFER`, `INVALID_AMOUNT`, `SENDER_NOT_ACTIVE`, `RECIPIENT_NOT_ACTIVE`, `NOT_AUTHORIZED`).
+- [ ] Create `services/branches.ts`:
+  - `listActiveBranches()`: Fetches active branches for registration and transfer preview.
+  - `adminListBranches()`, `adminCreateBranch()`, `adminUpdateBranch()`.
+- [ ] Update [services/admin.ts](file:///c:/banking-app/services/admin.ts):
+  - Add `recordBranchDeposit({ accountNumber, branchId, amount, note, idempotencyKey })` calling `app_deposit`.
+  - Add `adminSetAccountStatus(accountId, status, reason)` with audit logging.
+  - Add `adminListAuditLogs(limit, offset)`.
 
-```text
-active
-inactive
-blocked
-```
+### Phase 4: Customer Interface Transformation
+- [ ] Customer Dashboard ([app/(customer)/(tabs)/index.tsx](file:///c:/banking-app/app/(customer)/(tabs)/index.tsx)):
+  - Display user greeting, available balance with hide/reveal toggle.
+  - Display account card with **Masked Account Number** and **Assigned Branch / District** (FR-ACC-03, FR-BR-01).
+  - Update [components/banking/QuickActions.tsx](file:///c:/banking-app/components/banking/QuickActions.tsx): Replace "Deposit" button with "Withdraw" (simulated), "Send Money", "My Account", and "History".
+- [ ] Customer Send Money Screen ([app/(customer)/send-money.tsx](file:///c:/banking-app/app/(customer)/send-money.tsx)):
+  - **Step 1**: Enter Recipient Account Number -> Real-time backend lookup via `lookup_recipient` -> Renders preview with abbreviated name (`Md. R***`), masked account (`••••••4821`), and branch name/district. Shows immediate error if account not found or inactive.
+  - **Step 2**: Enter Amount (2 decimal places limit, balance warning) + Optional Note.
+  - **Step 3**: Confirmation Sheet displaying full breakdown, zero transfer fee notice (BR-07), and educational simulation notice. Generates UUID `idempotency_key` upon sheet display.
+  - **Step 4**: Submission calling `app_transfer`. Displays success receipt modal with unique reference (`TXN-YYYYMMDD-XXXX`), sender/receiver details, timestamp, and "Done" navigation.
+- [ ] Customer Simulated Withdrawal ([app/(customer)/withdraw.tsx](file:///c:/banking-app/app/(customer)/withdraw.tsx)):
+  - Clear banner: *"Simulated Withdrawal: This is an educational demonstration and does not dispense physical cash."* (FR-WD-05).
+  - Validates amount against available balance.
+  - Generates UUID `idempotency_key` and calls `app_withdraw`.
+  - Displays success screen with generated transaction reference and new balance.
+- [ ] Decommission Customer Deposit:
+  - Remove `app/(customer)/deposit.tsx` or replace with an informational screen directing the customer to an authorized branch teller (FR-DEP-01).
+- [ ] Transaction History & Details ([app/(customer)/(tabs)/transactions.tsx](file:///c:/banking-app/app/(customer)/(tabs)/transactions.tsx), [app/(customer)/transaction-details.tsx](file:///c:/banking-app/app/(customer)/transaction-details.tsx)):
+  - Filter tabs: All, Transfers, Withdrawals, Deposits (FR-TXN-02).
+  - Details screen: Unique transaction reference, transaction type pill, amount with +/- indicator, counterparty masked account, counterparty branch name, description, timestamp, and audit integrity indicator.
+- [ ] Notifications ([app/(customer)/(tabs)/notifications.tsx](file:///c:/banking-app/app/(customer)/(tabs)/notifications.tsx)):
+  - Unread badge counter.
+  - Live notifications for incoming transfers, sent transfers, withdrawals, and teller deposits.
+  - Mark single/all as read.
+- [ ] Customer Profile ([app/(customer)/(tabs)/profile.tsx](file:///c:/banking-app/app/(customer)/(tabs)/profile.tsx)):
+  - View full name, email, phone, role, bank account number, and assigned branch.
+  - Edit permitted fields only: Full Name and Phone. Account number, balance, status, and role are non-editable (FR-PROF-02).
 
-Important:
+### Phase 5: Authentication & Onboarding
+- [ ] Login Screen ([app/(auth)/login.tsx](file:///c:/banking-app/app/(auth)/login.tsx)):
+  - Add "Forgot Password?" link navigating to `reset-password`.
+- [ ] Password Reset Screen (`app/(auth)/reset-password.tsx`):
+  - Email input with validation.
+  - Calls `supabase.auth.resetPasswordForEmail`.
+  - Displays confirmation instructions (FR-AUTH-04, TC-19).
+- [ ] Register Screen ([app/(auth)/register.tsx](file:///c:/banking-app/app/(auth)/register.tsx)):
+  - Collects Full Name, Phone, Email, Password, Confirm Password.
+  - Branch selection dropdown from active branches seeded in `branches` table (FR-BR-01, FR-BR-02).
+  - Explicit role restriction: Client can never select or submit an administrative role (FR-ADM-01, TC-22).
 
-- Balance must never become negative.
-- Account number must be unique.
-- Monetary values must use an appropriate numeric/decimal database type.
-- Do not use floating-point values for money calculations.
-
----
-
-## 8.3 transactions
-
-Fields:
-
-```text
-id UUID PRIMARY KEY
-sender_account_id UUID NULL
-receiver_account_id UUID NULL
-amount NUMERIC(15,2) NOT NULL
-transaction_type TEXT NOT NULL
-description TEXT NULL
-status TEXT NOT NULL
-created_at TIMESTAMPTZ DEFAULT now()
-```
-
-Transaction types:
-
-```text
-deposit
-withdrawal
-transfer
-```
-
-Transaction statuses:
-
-```text
-completed
-failed
-```
-
-Optional future status:
-
-```text
-pending
-```
-
----
-
-## 8.4 notifications
-
-Fields:
-
-```text
-id UUID PRIMARY KEY
-user_id UUID NOT NULL
-title TEXT NOT NULL
-message TEXT NOT NULL
-is_read BOOLEAN NOT NULL DEFAULT false
-created_at TIMESTAMPTZ DEFAULT now()
-```
-
----
-
-# 9. Phase 4 - Database Relationships
-
-Implement relationships:
-
-```text
-auth.users
-    │
-    └── profiles
-            │
-            └── accounts
-                    │
-                    └── transactions
-```
-
-Notifications:
-
-```text
-profiles
-    │
-    └── notifications
-```
-
-A customer may have one account in the initial version.
-
-Do not add unnecessary account types or complex banking relationships.
-
----
-
-# 10. Phase 5 - Row Level Security
-
-RLS is mandatory.
-
-## Profiles
-
-Customer:
-
-- Can view own profile.
-- Can update own permitted profile fields.
-
-Admin:
-
-- Can view customer profiles.
-- Can perform permitted administrative actions.
-
-## Accounts
-
-Customer:
-
-- Can view only their own account.
-
-Admin:
-
-- Can view accounts.
-
-Customers must not be able to directly update:
-
-```text
-balance
-status
-user_id
-```
-
-from the client.
-
-## Transactions
-
-Customer:
-
-- Can view transactions involving their own account.
-
-Admin:
-
-- Can view all transactions.
-
-Customers should not be allowed to insert arbitrary financial transaction records directly.
-
-## Notifications
-
-Customer:
-
-- Can view own notifications.
-- Can mark own notifications as read.
-
-Admin:
-
-- Can access notifications where necessary.
+### Phase 6: Admin & Teller Portal
+- [ ] Admin Navigation Layout ([app/(admin)/_layout.tsx](file:///c:/banking-app/app/(admin)/_layout.tsx)):
+  - Tabs: Overview, Users, Accounts, Branches, Transactions.
+  - Quick action: "Branch Cash Deposit" (Staff Operator Workflow).
+- [ ] Staff Simulated Branch Deposit Screen (`app/(admin)/deposit.tsx`):
+  - Operator workflow (FR-DEP-01..08, TC-11):
+    1. Search & select target account (displays recipient name and assigned branch).
+    2. Select receiving branch.
+    3. Enter deposit amount and reference note.
+    4. Operator confirms simulated physical cash was received at counter.
+    5. Dispatches `app_deposit` RPC atomically.
+    6. Displays confirmation receipt with operator ID and unique reference.
+- [ ] Branch Management Screen (`app/(admin)/branches.tsx`):
+  - Lists all branches with active/inactive status.
+  - Modal to create a new branch or toggle branch active status (FR-ADM-06).
+- [ ] Account Status Management ([app/(admin)/(tabs)/accounts.tsx](file:///c:/banking-app/app/(admin)/(tabs)/accounts.tsx)):
+  - Filter accounts by status (`active`, `inactive`, `blocked`).
+  - Action modal to change status with required reason input, logging to `audit_logs` (FR-ADM-04, FR-ADM-08, TC-15).
+- [ ] Transaction Monitoring ([app/(admin)/(tabs)/transactions.tsx](file:///c:/banking-app/app/(admin)/(tabs)/transactions.tsx)):
+  - Search by transaction reference (`TXN-...`) or account number.
+  - Filter by transaction type (`transfer`, `withdrawal`, `deposit`), status, and date range (FR-ADM-05).
 
 ---
 
-# 11. Phase 6 - Account Creation
+## 6. Comprehensive Verification & Test Traceability Matrix (TC-01 – TC-23)
 
-After successful registration:
+Every test case specified in SRS v2.1 §10 maps directly to our implementation and validation steps:
 
-1. Create profile.
-2. Generate a unique account number.
-3. Create savings account.
-4. Set initial balance to zero.
-5. Set status to active.
-6. Redirect user to dashboard.
-
-Account number generation must happen safely and must guarantee uniqueness.
-
-Example format:
-
-```text
-1000000001
-1000000002
-1000000003
-```
-
-Do not generate account numbers using only a random client-side value without uniqueness validation.
-
----
-
-# 12. Phase 7 - Customer Dashboard
-
-Create the main customer home screen.
-
-Display:
-
-```text
-Hello, [Name]
-
-Available Balance
-৳45,500.00
-
-Savings Account
-****4521
-
-[Send Money]
-[Deposit]
-[Withdraw]
-
-Recent Transactions
-```
-
-Dashboard should show:
-
-- Customer name
-- Current balance
-- Masked account number
-- Quick actions
-- Recent transactions
-
-Do not expose unnecessary sensitive information.
+| Test ID | Test Scenario | SRS Expected Result | Verification Method |
+| :--- | :--- | :--- | :--- |
+| **TC-01** | Valid customer login | Reaches customer dashboard | Expo E2E / manual login with customer test account |
+| **TC-02** | Customer reads another's account directly | RLS denies direct select query | SQL test query with customer JWT attempting to select another user's account row |
+| **TC-03** | Valid transfer with sufficient funds | Sender debited, recipient credited, transaction & audit created atomically | Run `app_transfer`, verify sender -amount, recipient +amount, txn reference exists |
+| **TC-04** | Transfer exceeds available balance | Rejected (`INSUFFICIENT_FUNDS`), balances unchanged | Execute transfer for ৳999,999 on ৳5,000 balance; verify rollback |
+| **TC-05** | Recipient account does not exist | Account-not-found error, balances unchanged | Call `lookup_recipient('AC999999')`, verify error and no balance mutation |
+| **TC-06** | Recipient account is inactive/blocked | Transfer rejected (`RECIPIENT_NOT_ACTIVE`) | Block recipient account, attempt transfer, verify exception raised |
+| **TC-07** | Transfer to own account | Rejected (`SELF_TRANSFER`) | Transfer from Account A to Account A; verify rejected |
+| **TC-08** | Concurrent transfer race condition | No partial update or negative balance | Fire two concurrent transfers of ৳10,000 against ৳10,000 balance; exactly one succeeds |
+| **TC-09** | Customer direct update on `balance` | RLS / DB permissions reject direct update | Attempt `supabase.from('accounts').update({ balance: 99999 })`; verify 0 rows modified or permission denied |
+| **TC-10** | Customer attempts self-deposit | No customer self-deposit feature exists | Customer deposit UI removed; client calling `deposit_funds` fails |
+| **TC-11** | Authorized operator simulated branch deposit | Target credited, transaction & audit records consistent | Staff user runs `app_deposit`; verify balance increased and audit log populated |
+| **TC-12** | Unauthorized customer attempts deposit | Backend rejects operation (`NOT_AUTHORIZED`) | Customer JWT calls `app_deposit`; verify Postgres raises `NOT_AUTHORIZED` |
+| **TC-13** | Network retry / duplicate submission | Reused idempotency key returns original transaction, no double debit | Execute `app_transfer` with identical `p_idempotency_key` twice; verify single transaction row |
+| **TC-14** | Customer opens history | Only authorized rows shown with counterparty & status | Query transactions as Customer A; verify Customer B private transactions omitted |
+| **TC-15** | Admin changes account status | Requires admin role; writes audit log | Admin toggles account to `blocked`; verify status changed and `audit_logs` record created |
+| **TC-16** | Valid simulated withdrawal | Debited atomically; no-cash message shown; notification created | Run `app_withdraw`; verify balance reduced, withdrawal txn created, notification added |
+| **TC-17** | Withdrawal exceeds balance | Rejected; balance unchanged | Attempt withdrawal of ৳10,000 on ৳2,000 balance; verify failure |
+| **TC-18** | Customer edits profile | Permitted fields saved; role, balance, account number, status untouched | Customer updates phone number; attempt to alter role or balance ignored/rejected |
+| **TC-19** | Password reset request | Supabase reset-email flow triggered | Request reset for test email; verify Supabase Auth triggers password reset email |
+| **TC-20** | Incoming transfer notification | Recipient sees unread notification; marking read updates state | Send transfer to Customer B; Customer B opens notifications, marks read |
+| **TC-21** | Recipient lookup data exposure | Only abbreviated name and masked number returned; full name never exposed | Call `lookup_recipient`; verify returns `Md. R***` and `••••••4821` |
+| **TC-22** | Role-elevation attempt | Rejected; roles cannot be set from client | Pass `role: 'admin'` in `auth.signUp`; verify profile role defaults to `customer` |
+| **TC-23** | Invalid amount format/limit | Rejected before any balance change | Test amounts: `-50`, `0`, `10.555` (3 decimals), `99999999` (over limit); verify all rejected |
 
 ---
 
-# 13. Phase 8 - Deposit
-
-Deposit is a simulated banking operation.
-
-Flow:
+## 7. Execution Checklist & File Change Plan
 
 ```text
-Deposit Screen
-     ↓
-Enter amount
-     ↓
-Validate amount
-     ↓
-Call secure database operation
-     ↓
-Increase balance
-     ↓
-Create transaction
-     ↓
-Create notification
-     ↓
-Show success
+Files to Create:
+├── supabase/migrations/0007_srs_v2_alignment.sql   (Complete schema, RLS & RPC alignment)
+├── services/branches.ts                            (Branch query & admin branch management)
+├── app/(auth)/reset-password.tsx                   (Password reset flow - FR-AUTH-04)
+├── app/(admin)/deposit.tsx                         (Admin/teller branch deposit - FR-DEP-02)
+└── app/(admin)/branches.tsx                        (Admin branch management - FR-ADM-06)
+
+Files to Update:
+├── types/db.ts                                     (Add Branch, AuditLog, update types)
+├── utils/format.ts                                 (Masking, BDT currency, strict 2-decimal validator)
+├── constants/routes.ts                             (Add new routes, remove customer deposit)
+├── services/auth.ts                                (Add resetPassword, branch assignment)
+├── services/accounts.ts                            (Add lookupRecipient, join branches)
+├── services/transactions.ts                        (Use app_transfer, app_withdraw, remove depositFunds)
+├── services/admin.ts                               (Add branch deposit, account status with audit)
+├── components/banking/QuickActions.tsx             (Remove deposit tile, add withdraw/send)
+├── app/(customer)/(tabs)/index.tsx                 (Display branch & masked account, remove deposit)
+├── app/(customer)/send-money.tsx                   (4-step flow with abbreviated name & branch preview)
+├── app/(customer)/withdraw.tsx                     (Add simulated disclaimer, idempotency, reference)
+├── app/(customer)/deposit.tsx                      (Decommission or redirect to branch notice)
+├── app/(customer)/(tabs)/transactions.tsx          (Support filters & reference display)
+├── app/(customer)/transaction-details.tsx          (Display counterparty branch & reference)
+├── app/(customer)/(tabs)/profile.tsx               (Display branch, lock non-editable fields)
+├── app/(auth)/login.tsx                            (Link to reset-password)
+├── app/(auth)/register.tsx                         (Add branch picker from active branches)
+├── app/(admin)/_layout.tsx                         (Add branches and deposit to navigation)
+├── app/(admin)/(tabs)/accounts.tsx                 (Show branch, audit log on status change)
+└── app/(admin)/(tabs)/transactions.tsx             (Filter by reference, branch, and type)
 ```
-
-Validation:
-
-- Amount must be numeric.
-- Amount must be greater than zero.
-- Account must be active.
-- Reject invalid amounts.
-
-The balance update and transaction insertion should happen atomically.
-
----
-
-# 14. Phase 9 - Withdrawal
-
-Flow:
-
-```text
-Withdraw Screen
-      ↓
-Enter amount
-      ↓
-Validate amount
-      ↓
-Check account status
-      ↓
-Check balance
-      ↓
-Secure database operation
-      ↓
-Deduct balance
-      ↓
-Create transaction
-      ↓
-Create notification
-      ↓
-Show success
-```
-
-Rules:
-
-- Amount > 0.
-- Account must be active.
-- Amount <= available balance.
-- Balance must never become negative.
-
-The balance update and transaction insertion must be atomic.
-
----
-
-# 15. Phase 10 - Money Transfer
-
-This is the most important financial operation.
-
-Flow:
-
-```text
-Sender
-  ↓
-Enter recipient account number
-  ↓
-Enter amount
-  ↓
-Validate
-  ↓
-Find recipient
-  ↓
-Check sender account
-  ↓
-Check balance
-  ↓
-Database RPC/function
-  ├── Deduct sender
-  ├── Add receiver
-  ├── Create transaction
-  └── Create notifications
-  ↓
-Success
-```
-
-Validation:
-
-- Recipient account must exist.
-- Sender account must exist.
-- Sender account must be active.
-- Recipient account must be active.
-- Amount must be greater than zero.
-- Sender must have sufficient balance.
-- Sender cannot transfer to their own account.
-
-## Critical Security Requirement
-
-Do NOT perform this as separate client-side operations:
-
-```text
-update sender
-update receiver
-insert transaction
-```
-
-Instead, use a PostgreSQL function/RPC so the operation is atomic.
-
-If any step fails:
-
-```text
-ROLLBACK
-```
-
-The transfer must not partially complete.
-
----
-
-# 16. Phase 11 - Transaction History
-
-Create a transaction history screen.
-
-Display:
-
-```text
-All
-Deposit
-Withdrawal
-Transfer
-```
-
-Each row should show:
-
-- Transaction type
-- Amount
-- Date/time
-- Status
-- Direction where applicable
-
-Example:
-
-```text
-+ ৳5,000
-Deposit
-Today
-
-- ৳2,000
-Transfer
-Today
-
-- ৳1,000
-Withdrawal
-Yesterday
-```
-
-Add transaction details screen.
-
----
-
-# 17. Phase 12 - Notifications
-
-Generate notifications for:
-
-### Deposit
-
-```text
-Money Deposited
-৳5,000 has been added to your account.
-```
-
-### Withdrawal
-
-```text
-Money Withdrawn
-৳1,000 has been withdrawn from your account.
-```
-
-### Transfer Sent
-
-```text
-Money Sent
-৳2,000 was sent successfully.
-```
-
-### Transfer Received
-
-```text
-Money Received
-You received ৳2,000.
-```
-
-Notification requirements:
-
-- Store notification in database.
-- Display unread indicator.
-- Allow marking as read.
-
----
-
-# 18. Phase 13 - Profile
-
-Profile screen should show:
-
-```text
-Profile Picture (optional)
-Full Name
-Email
-Phone
-Account Number
-Account Type
-Account Status
-```
-
-Allow editing only appropriate fields.
-
-Do not allow customers to change:
-
-```text
-role
-balance
-account_number
-account status
-```
-
----
-
-# 19. Phase 14 - Admin
-
-Create admin role support.
-
-Admin dashboard:
-
-```text
-Admin Dashboard
-
-Total Users
-Total Accounts
-Active Accounts
-Total Transactions
-```
-
-Keep statistics simple.
-
----
-
-# 20. Phase 15 - Admin User Management
-
-Admin can:
-
-- View users.
-- Search users.
-- View user details.
-- View user account.
-- Block/unblock users where appropriate.
-
-Do not allow an admin to edit sensitive financial records arbitrarily.
-
----
-
-# 21. Phase 16 - Admin Account Management
-
-Admin can:
-
-- View all accounts.
-- Search account number.
-- View account status.
-- Activate account.
-- Deactivate/block account.
-
-Important:
-
-Admin actions affecting account status should be protected by RLS/secure backend logic.
-
----
-
-# 22. Phase 17 - Admin Transaction Monitoring
-
-Admin can:
-
-- View all transactions.
-- Search by transaction ID.
-- Search account number.
-- Filter by transaction type.
-- Filter by status.
-- View transaction details.
-
-Completed transaction records should be treated as historical records and should not be casually edited.
-
----
-
-# 23. Phase 18 - Navigation
-
-Customer navigation should be simple.
-
-Recommended:
-
-```text
-Home
-Transactions
-Notifications
-Profile
-```
-
-Quick actions from Home:
-
-```text
-Send Money
-Deposit
-Withdraw
-```
-
-Admin navigation:
-
-```text
-Dashboard
-Users
-Accounts
-Transactions
-```
-
-Authentication flow:
-
-```text
-Splash
-  ↓
-Check Session
-  ├── Not Logged In → Login
-  │                    ↓
-  │                  Register
-  │
-  └── Logged In → Check Role
-                    ├── Customer → Customer App
-                    └── Admin → Admin App
-```
-
----
-
-# 24. Phase 19 - UI/UX Requirements
-
-Use a consistent design.
-
-Requirements:
-
-- Clean banking-style interface.
-- Clear typography.
-- Consistent spacing.
-- Consistent buttons.
-- Clear success/error states.
-- Loading indicators.
-- Empty states.
-- Confirmation dialogs for financial operations.
-- Responsive layouts for common Android screen sizes.
-
-Avoid unnecessary animations.
-
-The UI should prioritize clarity over decoration.
-
----
-
-# 25. Phase 20 - Validation and Error Handling
-
-Every important operation needs:
-
-## Loading State
-
-Example:
-
-```text
-Processing...
-```
-
-## Success State
-
-Example:
-
-```text
-Transfer Successful
-Transaction ID: TXN123456
-```
-
-## Error State
-
-Examples:
-
-```text
-Invalid amount.
-```
-
-```text
-Insufficient balance.
-```
-
-```text
-Recipient account not found.
-```
-
-```text
-Your account is inactive.
-```
-
-```text
-Something went wrong. Please try again.
-```
-
-Never expose raw database errors to users.
-
----
-
-# 26. Phase 21 - Testing
-
-Test authentication:
-
-- Valid registration
-- Duplicate email
-- Invalid email
-- Wrong password
-- Logout
-- Session persistence
-
-Test deposit:
-
-- Valid amount
-- Zero amount
-- Negative amount
-- Inactive account
-- Balance update
-- Transaction creation
-
-Test withdrawal:
-
-- Valid amount
-- Zero amount
-- Negative amount
-- Insufficient balance
-- Balance update
-- Transaction creation
-
-Test transfer:
-
-- Valid recipient
-- Invalid recipient
-- Same account
-- Insufficient balance
-- Inactive sender
-- Inactive receiver
-- Successful transfer
-- Failed transfer
-- Atomic rollback
-
-Test security:
-
-- Customer cannot view another customer's account.
-- Customer cannot modify balance directly.
-- Customer cannot modify role.
-- Customer cannot access admin screens.
-- Customer cannot create arbitrary completed transactions.
-- Admin-only functionality is protected.
-
----
-
-# 27. Phase 22 - Final Testing Checklist
-
-Before considering the project complete:
-
-### Authentication
-
-- [ ] Registration works.
-- [ ] Login works.
-- [ ] Logout works.
-- [ ] Session persists.
-- [ ] Invalid credentials are handled.
-
-### Customer
-
-- [ ] Dashboard works.
-- [ ] Profile works.
-- [ ] Account information works.
-- [ ] Balance displays correctly.
-- [ ] Deposit works.
-- [ ] Withdrawal works.
-- [ ] Transfer works.
-- [ ] Transaction history works.
-- [ ] Transaction details work.
-- [ ] Notifications work.
-
-### Admin
-
-- [ ] Admin login works.
-- [ ] Admin dashboard works.
-- [ ] User list works.
-- [ ] Account list works.
-- [ ] Transaction list works.
-- [ ] Account status management works.
-
-### Security
-
-- [ ] RLS is enabled.
-- [ ] Customer data isolation works.
-- [ ] Admin authorization works.
-- [ ] Service-role key is not exposed.
-- [ ] Client cannot directly modify balances.
-- [ ] Financial operations use secure database-side logic.
-
-### UI
-
-- [ ] Loading states work.
-- [ ] Empty states work.
-- [ ] Error states work.
-- [ ] Success states work.
-- [ ] Navigation works.
-- [ ] No obvious UI crashes.
-
----
-
-# 28. Git Strategy
-
-Use Git throughout development.
-
-Recommended branches:
-
-```text
-main
-develop
-feature/auth
-feature/accounts
-feature/transactions
-feature/admin
-```
-
-Commit examples:
-
-```text
-feat: add Supabase authentication
-feat: create account schema
-feat: add customer dashboard
-feat: implement deposit operation
-feat: implement withdrawal operation
-feat: implement secure money transfer
-feat: add transaction history
-feat: add notifications
-feat: add admin dashboard
-fix: handle insufficient balance
-fix: protect account balance with RLS
-```
-
-Do not commit:
-
-```text
-.env
-secrets
-service-role keys
-passwords
-private credentials
-```
-
----
-
-# 29. Definition of Done
-
-The project is considered complete when:
-
-1. A customer can register.
-2. A customer can log in.
-3. A customer receives a bank account.
-4. A customer can view balance.
-5. A customer can deposit simulated money.
-6. A customer can withdraw simulated money.
-7. A customer can transfer money to another account.
-8. Transfers are atomic and secure.
-9. Every financial operation creates a transaction record.
-10. Customers can view their transaction history.
-11. Customers receive notifications.
-12. Customers can manage their profile.
-13. Admin can log in.
-14. Admin can view users.
-15. Admin can manage account status.
-16. Admin can monitor transactions.
-17. RLS protects user data.
-18. Customers cannot directly manipulate balances.
-19. Application handles errors and loading states.
-20. The application works reliably on the target Android environment.
-
----
-
-# 30. AI Agent Working Rules
-
-When implementing this plan, the AI agent should:
-
-1. Work phase-by-phase.
-2. Complete and test one phase before moving to the next.
-3. Inspect existing files before creating new files.
-4. Reuse existing components where appropriate.
-5. Avoid unnecessary dependencies.
-6. Explain significant architectural decisions.
-7. After each major phase, verify that the project still builds.
-8. Fix errors before continuing.
-9. Never bypass RLS for convenience.
-10. Never expose privileged Supabase credentials.
-11. Never implement financial balance changes purely in client-side JavaScript.
-12. Keep financial database operations atomic.
-13. Keep the initial scope limited to the features defined in this plan.
-14. Do not add future-enhancement features unless explicitly requested.
-15. Before finalizing, run through the complete Definition of Done checklist.
-
----
-
-# 31. Recommended Implementation Order
-
-Follow this exact high-level sequence:
-
-```text
-1. Inspect existing project
-        ↓
-2. Configure React Native / Expo
-        ↓
-3. Configure Supabase
-        ↓
-4. Create database schema
-        ↓
-5. Create RLS policies
-        ↓
-6. Implement authentication
-        ↓
-7. Implement profile
-        ↓
-8. Implement account creation
-        ↓
-9. Implement customer dashboard
-        ↓
-10. Implement deposit
-        ↓
-11. Implement withdrawal
-        ↓
-12. Implement secure money transfer
-        ↓
-13. Implement transaction history
-        ↓
-14. Implement notifications
-        ↓
-15. Implement admin authentication
-        ↓
-16. Implement admin dashboard
-        ↓
-17. Implement user/account management
-        ↓
-18. Implement transaction monitoring
-        ↓
-19. Improve UI/UX
-        ↓
-20. Security testing
-        ↓
-21. Functional testing
-        ↓
-22. Final cleanup
-```
-
-# 32. Important Final Instruction
-
-The AI agent must treat this file as the implementation scope for SmartBank.
-
-If a requested feature is outside this plan, do not silently add it. Ask for confirmation or clearly identify it as a scope change.
-
-The primary objective is to deliver a **simple, secure, functional, and presentable university banking application**, not a production banking platform.
