@@ -311,13 +311,13 @@ $$;
   - Edit permitted fields only: Full Name and Phone. Account number, balance, status, and role are non-editable (FR-PROF-02).
 
 ### Phase 5: Authentication & Onboarding
-- [ ] Login Screen ([app/(auth)/login.tsx](file:///c:/banking-app/app/(auth)/login.tsx)):
+- [x] Login Screen ([app/(auth)/login.tsx](file:///c:/banking-app/app/(auth)/login.tsx)):
   - Add "Forgot Password?" link navigating to `reset-password`.
-- [ ] Password Reset Screen (`app/(auth)/reset-password.tsx`):
+- [x] Password Reset Screen (`app/(auth)/reset-password.tsx`):
   - Email input with validation.
   - Calls `supabase.auth.resetPasswordForEmail`.
   - Displays confirmation instructions (FR-AUTH-04, TC-19).
-- [ ] Register Screen ([app/(auth)/register.tsx](file:///c:/banking-app/app/(auth)/register.tsx)):
+- [x] Register Screen ([app/(auth)/register.tsx](file:///c:/banking-app/app/(auth)/register.tsx)):
   - Collects Full Name, Phone, Email, Password, Confirm Password.
   - Branch selection dropdown from active branches seeded in `branches` table (FR-BR-01, FR-BR-02).
   - Explicit role restriction: Client can never select or submit an administrative role (FR-ADM-01, TC-22).

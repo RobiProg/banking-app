@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { AuthButton } from '../../components/auth/AuthButton';
 import { AuthInput } from '../../components/auth/AuthInput';
@@ -113,18 +113,28 @@ export default function LoginScreen() {
         editable={!loading}
       />
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
-        accessibilityState={{ selected: showPassword }}
-        onPress={() => setShowPassword((s) => !s)}
-        style={styles.toggleRow}
-        disabled={loading}
-      >
-        <Text style={styles.toggleText}>
-          {showPassword ? 'Hide password' : 'Show password'}
-        </Text>
-      </Pressable>
+      <View style={styles.passwordMetaRow}>
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel="Forgot password?"
+          onPress={() => router.push(ROUTES.resetPassword)}
+          disabled={loading}
+        >
+          <Text style={styles.forgotLink}>Forgot password?</Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+          accessibilityState={{ selected: showPassword }}
+          onPress={() => setShowPassword((s) => !s)}
+          disabled={loading}
+        >
+          <Text style={styles.toggleText}>
+            {showPassword ? 'Hide password' : 'Show password'}
+          </Text>
+        </Pressable>
+      </View>
 
       <FormErrorBanner message={formError} />
 
@@ -163,14 +173,21 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg + spacing.xs, // 28
     lineHeight: typography.subtitle.size * 1.4,
   },
-  toggleRow: {
-    alignSelf: 'flex-end',
+  passwordMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: spacing.md,
   },
-  toggleText: {
+  forgotLink: {
     color: colors.primary,
     fontSize: 13,
     fontWeight: '600',
+  },
+  toggleText: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '500',
   },
   footerText: {
     color: colors.textMuted,

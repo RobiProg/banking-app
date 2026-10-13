@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { AuthButton } from '../../components/auth/AuthButton';
 import { AuthInput } from '../../components/auth/AuthInput';
@@ -10,6 +10,8 @@ import { colors } from '../../constants/colors';
 import { spacing, typography } from '../../constants/layout';
 import { ROUTES } from '../../constants/routes';
 import { signUp as signUpService } from '../../services/auth';
+import { listActiveBranches } from '../../services/branches';
+import type { Branch } from '../../types/db';
 import {
   clearFieldError,
   emailErrorMessage,
@@ -31,6 +33,11 @@ const SUCCESS_REDIRECT_MS = 1200;
 const SUCCESS_MESSAGE = 'Account created. Taking you to the login screen...';
 const PASSWORD_HINT_MESSAGE = 'Use 8 or more characters';
 
+/**
+ * Customer Registration Screen (SRS v2.1 FR-AUTH-01, FR-BR-01, FR-ADM-01, TC-22).
+ * Includes home branch selection from active Bangladesh branches.
+ * Enforces role restriction (cannot self-assign admin/teller roles).
+ */
 export default function RegisterScreen() {
   const router = useRouter();
   const [fullName, setFullName] = useState('');
@@ -44,6 +51,27 @@ export default function RegisterScreen() {
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
+  // Branch Selection (FR-BR-01, FR-BR-02)
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState<string>('');
+  const [showBranchModal, setShowBranchModal] = useState(false);
+
+  useEffect(() => {
+    async function loadBranches() {
+      const res = await listActiveBranches();
+      if (res.branches.length > 0) {
+        setBranches(res.branches);
+        setSelectedBranchId(res.branches[0].id);
+      }
+    }
+    loadBranches();
+  }, []);
+
+  const selectedBranch = useMemo(
+    () => branches.find((b) => b.id === selectedBranchId) ?? branches[0],
+    [branches, selectedBranchId],
+  );
+
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
     () => () => {
@@ -53,8 +81,7 @@ export default function RegisterScreen() {
   );
 
   const passwordCheck = useMemo(() => validatePassword(password), [password]);
-  const showPasswordHint =
-    password.length > 0 && !passwordCheck.ok;
+  const showPasswordHint = password.length > 0 && !passwordCheck.ok;
 
   const canSubmit = useMemo(() => {
     return (
@@ -94,15 +121,21 @@ export default function RegisterScreen() {
     setFieldErrors({});
 
     setLoading(true);
-    const result = await signUpService({ fullName, phone, email, password });
+    // Explicitly pass only customer onboarding fields with selected branchId (FR-ADM-01, TC-22)
+    const result = await signUpService({
+      fullName,
+      phone,
+      email,
+      password,
+      branchId: selectedBranchId || null,
+    });
     setLoading(false);
 
     if (result.errorMessage) {
       setFormError(result.errorMessage);
       return;
     }
-    // Keep loading=true during the redirect window so the form stays
-    // disabled and the user can't fire another signUp while we wait.
+
     setLoading(true);
     setSuccess(true);
     successTimerRef.current = setTimeout(() => {
@@ -147,6 +180,28 @@ export default function RegisterScreen() {
         error={fieldErrors.phone ?? null}
         editable={!loading}
       />
+
+      {/* Home Branch Selection (FR-BR-01, FR-BR-02) */}
+      <View style={styles.branchFieldContainer}>
+        <Text style={styles.branchLabel}>Home Branch</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Home Branch: ${selectedBranch?.name ?? 'Select branch'}`}
+          onPress={() => setShowBranchModal(true)}
+          style={styles.branchButton}
+          disabled={loading}
+        >
+          <View style={styles.branchButtonContent}>
+            <Text style={styles.branchButtonTitle} numberOfLines={1}>
+              {selectedBranch?.name ?? 'Loading branches...'}
+            </Text>
+            <Text style={styles.branchButtonSubtitle}>
+              {selectedBranch?.district ? `District: ${selectedBranch.district}` : 'Tap to change branch'}
+            </Text>
+          </View>
+          <Text style={styles.chevron}>▾</Text>
+        </Pressable>
+      </View>
 
       <AuthInput
         label="Email"
@@ -210,9 +265,7 @@ export default function RegisterScreen() {
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={
-          showPassword ? 'Hide passwords' : 'Show passwords'
-        }
+        accessibilityLabel={showPassword ? 'Hide passwords' : 'Show passwords'}
         accessibilityState={{ selected: showPassword }}
         onPress={() => setShowPassword((s) => !s)}
         style={styles.toggleRow}
@@ -244,6 +297,52 @@ export default function RegisterScreen() {
           Login
         </Text>
       </Text>
+
+      {/* Branch Selection Modal */}
+      <Modal
+        visible={showBranchModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowBranchModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Your Home Branch</Text>
+              <Pressable onPress={() => setShowBranchModal(false)}>
+                <Text style={styles.modalCloseText}>Done</Text>
+              </Pressable>
+            </View>
+
+            <FlatList
+              data={branches}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => {
+                const isSelected = item.id === selectedBranchId;
+                return (
+                  <Pressable
+                    style={[styles.branchItem, isSelected && styles.branchItemSelected]}
+                    onPress={() => {
+                      setSelectedBranchId(item.id);
+                      setShowBranchModal(false);
+                    }}
+                  >
+                    <View style={styles.branchItemText}>
+                      <Text style={[styles.branchItemName, isSelected && styles.branchItemTextActive]}>
+                        {item.name}
+                      </Text>
+                      <Text style={styles.branchItemDistrict}>
+                        {item.district} • Code: {item.branch_code}
+                      </Text>
+                    </View>
+                    {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                  </Pressable>
+                );
+              }}
+            />
+          </View>
+        </View>
+      </Modal>
     </ScreenContainer>
   );
 }
@@ -253,13 +352,51 @@ const styles = StyleSheet.create({
     fontSize: typography.title.size,
     fontWeight: typography.title.weight,
     color: colors.text,
-    marginBottom: spacing.xs + 2, // 6
+    marginBottom: spacing.xs + 2,
   },
   subtitle: {
     fontSize: typography.subtitle.size,
     color: colors.textMuted,
-    marginBottom: spacing.lg + spacing.xs, // 28
+    marginBottom: spacing.lg,
     lineHeight: typography.subtitle.size * 1.4,
+  },
+  branchFieldContainer: {
+    marginBottom: spacing.md,
+  },
+  branchLabel: {
+    fontSize: typography.label.size,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  branchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 4,
+  },
+  branchButtonContent: {
+    flex: 1,
+  },
+  branchButtonTitle: {
+    fontSize: typography.body.size,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  branchButtonSubtitle: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  chevron: {
+    fontSize: 18,
+    color: colors.textMuted,
+    marginLeft: spacing.sm,
   },
   toggleRow: {
     alignSelf: 'flex-end',
@@ -273,17 +410,83 @@ const styles = StyleSheet.create({
   passwordHint: {
     color: colors.textMuted,
     fontSize: typography.helper.size,
-    marginTop: -spacing.sm, // tuck under the password field
+    marginTop: -spacing.sm,
     marginBottom: spacing.md,
   },
   footerText: {
     color: colors.textMuted,
     fontSize: typography.body.size,
     textAlign: 'center',
-    marginTop: spacing.lg - spacing.xs, // 20
+    marginTop: spacing.lg - spacing.xs,
   },
   footerLink: {
     color: colors.primary,
     fontWeight: '700',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '65%',
+    padding: spacing.md,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    marginBottom: spacing.sm,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  modalCloseText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  branchItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  branchItemSelected: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: 8,
+  },
+  branchItemText: {
+    flex: 1,
+  },
+  branchItemName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  branchItemTextActive: {
+    color: colors.primaryDark,
+  },
+  branchItemDistrict: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  checkmark: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.primary,
+    marginLeft: spacing.sm,
   },
 });
