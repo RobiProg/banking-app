@@ -114,7 +114,7 @@ export default function SendMoneyScreen() {
       return;
     }
 
-    if (!res.info.eligible || res.info.status !== 'active') {
+    if (res.info.eligible === false || res.info.status !== 'active') {
       setRecipientError('Recipient account is not active or ineligible to receive funds.');
       return;
     }

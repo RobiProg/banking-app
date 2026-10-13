@@ -101,7 +101,8 @@ export default function AdminBranchDepositScreen() {
   const canSubmit = useMemo(() => {
     return (
       recipient !== null &&
-      recipient.eligible &&
+      recipient.eligible !== false &&
+      recipient.status === 'active' &&
       selectedBranchId !== '' &&
       parsedAmount.ok &&
       (parsedAmount.value ?? 0) > 0 &&
