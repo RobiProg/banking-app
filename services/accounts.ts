@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { mapRpcError } from './transactions';
 import type { Account, Branch, RecipientLookupInfo } from '../types/db';
+import { maskAccountNumber } from '../utils/format';
 
 export type AccountResult = {
   account: Account | null;
@@ -93,6 +94,34 @@ export async function lookupRecipient(
     });
 
     if (error) {
+      // Graceful fallback: If migration 0007 (lookup_recipient) is not yet applied in Supabase,
+      // fallback to lookup_account (0003_functions.sql) so Send Money still works
+      if (error.code === 'PGRST202' || error.message?.includes('lookup_recipient')) {
+        const fallback = await supabase.rpc('lookup_account', {
+          p_account_number: trimmed,
+        });
+
+        if (!fallback.error && fallback.data) {
+          const fb = fallback.data as { account_number: string; status: 'active' | 'inactive' | 'blocked' };
+          return {
+            info: {
+              account_number: fb.account_number,
+              masked_account_number: maskAccountNumber(fb.account_number),
+              abbreviated_name: 'Recipient Account',
+              account_type: 'savings',
+              branch_name: 'SmartBank Main',
+              district: 'Dhaka',
+              status: fb.status,
+              eligible: fb.status === 'active',
+            },
+            errorMessage: null,
+          };
+        } else if (fallback.error) {
+          return { info: null, errorMessage: mapRpcError(fallback.error.message) };
+        } else if (!fallback.data) {
+          return { info: null, errorMessage: 'No SmartBank account found for that number.' };
+        }
+      }
       return { info: null, errorMessage: mapRpcError(error.message) };
     }
 

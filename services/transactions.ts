@@ -37,6 +37,9 @@ export function mapRpcError(raw: string): string {
   if (code.includes('branch_not_found')) return 'The specified branch is invalid or inactive.';
   if (code.includes('invalid_status')) return 'Invalid status.';
   if (code.includes('account_not_found')) return 'Account not found.';
+  if (code.includes('schema cache') || code.includes('pgrst202') || code.includes('could not find the function')) {
+    return 'Database migration required: Please execute 0007_srs_v2_alignment.sql in your Supabase SQL Editor.';
+  }
   // Network / timeout
   if (
     code.includes('network') ||
@@ -181,14 +184,27 @@ export type AppTransferParams = {
 export async function appTransfer(params: AppTransferParams): Promise<FinancialOpResult> {
   try {
     const idempotencyKey = params.idempotencyKey || generateIdempotencyKey();
+    const cleanAccount = params.recipientAccountNumber.trim().toUpperCase();
     const { data, error } = await supabase.rpc('app_transfer', {
-      p_recipient_account_number: params.recipientAccountNumber.trim().toUpperCase(),
+      p_recipient_account_number: cleanAccount,
       p_amount: params.amount,
       p_description: params.description ?? null,
       p_idempotency_key: idempotencyKey,
     });
 
-    if (error) return { transaction: null, errorMessage: mapRpcError(error.message) };
+    if (error) {
+      // Graceful fallback to transfer_money (0003_functions.sql) if 0007 migration has not been applied yet
+      if (error.code === 'PGRST202' || error.message?.includes('app_transfer')) {
+        const fallback = await supabase.rpc('transfer_money', {
+          p_recipient_account_number: cleanAccount,
+          p_amount: params.amount,
+          p_description: params.description ?? null,
+        });
+        if (fallback.error) return { transaction: null, errorMessage: mapRpcError(fallback.error.message) };
+        return { transaction: fallback.data as Transaction, errorMessage: null };
+      }
+      return { transaction: null, errorMessage: mapRpcError(error.message) };
+    }
     return { transaction: data as Transaction, errorMessage: null };
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -222,7 +238,17 @@ export async function appWithdraw(params: AppWithdrawParams): Promise<FinancialO
       p_idempotency_key: idempotencyKey,
     });
 
-    if (error) return { transaction: null, errorMessage: mapRpcError(error.message) };
+    if (error) {
+      // Graceful fallback to withdraw_funds (0003_functions.sql) if 0007 migration has not been applied yet
+      if (error.code === 'PGRST202' || error.message?.includes('app_withdraw')) {
+        const fallback = await supabase.rpc('withdraw_funds', {
+          p_amount: params.amount,
+        });
+        if (fallback.error) return { transaction: null, errorMessage: mapRpcError(fallback.error.message) };
+        return { transaction: fallback.data as Transaction, errorMessage: null };
+      }
+      return { transaction: null, errorMessage: mapRpcError(error.message) };
+    }
     return { transaction: data as Transaction, errorMessage: null };
   } catch (err) {
     // eslint-disable-next-line no-console
