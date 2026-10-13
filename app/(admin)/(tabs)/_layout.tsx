@@ -43,6 +43,13 @@ export default function AdminTabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="branches"
+        options={{
+          title: 'Branches',
+          tabBarIcon: ({ color }) => <Glyph color={String(color)}>🏛</Glyph>,
+        }}
+      />
+      <Tabs.Screen
         name="transactions"
         options={{
           title: 'Transactions',

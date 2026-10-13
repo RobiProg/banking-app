@@ -1,5 +1,14 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  FlatList,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../../../constants/colors';
 import { spacing, typography } from '../../../constants/layout';
@@ -8,28 +17,37 @@ import { ErrorState } from '../../../components/common/ErrorState';
 import { EmptyState } from '../../../components/common/EmptyState';
 import { AuthInput } from '../../../components/auth/AuthInput';
 import { AccountRow, StatusPill } from '../../../components/admin/AccountRow';
-import { ConfirmDialog } from '../../../components/common/ConfirmDialog';
 import {
-  adminUpdateAccountStatus,
+  adminSetAccountStatus,
   listAccounts,
   type AdminAccountRow,
 } from '../../../services/admin';
 import type { AccountStatus } from '../../../types/db';
 
+const STATUS_FILTERS: { key: AccountStatus | 'all'; label: string }[] = [
+  { key: 'all', label: 'All status' },
+  { key: 'active', label: 'Active' },
+  { key: 'inactive', label: 'Inactive' },
+  { key: 'blocked', label: 'Blocked' },
+];
+
 /**
- * Admin accounts tab (Phase 16).
- * - Search by account number.
- * - Tap → modal to change status (active / inactive / blocked).
- * - Status change goes through the admin_update_account_status RPC.
+ * Admin accounts tab (Phase 6, FR-ADM-04, FR-ADM-08, TC-15).
+ * - Search by account number or customer name.
+ * - Filter by status (active / inactive / blocked).
+ * - Displays assigned branch and district.
+ * - Tap status action -> modal to specify reason -> logged to audit_logs table.
  */
 export default function AdminAccountsTab() {
   const [accounts, setAccounts] = useState<AdminAccountRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<AccountStatus | 'all'>('all');
 
   const [selected, setSelected] = useState<AdminAccountRow | null>(null);
   const [nextStatus, setNextStatus] = useState<AccountStatus | null>(null);
+  const [reason, setReason] = useState('Administrative compliance review');
   const [updating, setUpdating] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
 
@@ -50,14 +68,25 @@ export default function AdminAccountsTab() {
   function startStatusChange(acc: AdminAccountRow, status: AccountStatus) {
     setSelected(acc);
     setNextStatus(status);
+    setReason(
+      status === 'blocked'
+        ? 'Suspicious activity or AML hold'
+        : status === 'inactive'
+        ? 'Dormant account decommission'
+        : 'Reactivated upon customer request'
+    );
     setUpdateError(null);
   }
 
   async function confirmStatusChange() {
     if (!selected || !nextStatus) return;
+    if (!reason.trim()) {
+      setUpdateError('Please provide a reason for the audit log.');
+      return;
+    }
     setUpdating(true);
     setUpdateError(null);
-    const res = await adminUpdateAccountStatus(selected.id, nextStatus);
+    const res = await adminSetAccountStatus(selected.id, nextStatus, reason.trim());
     setUpdating(false);
     if (res.errorMessage) {
       setUpdateError(res.errorMessage);
@@ -68,12 +97,17 @@ export default function AdminAccountsTab() {
     reload();
   }
 
+  const filteredAccounts = useMemo(() => {
+    if (statusFilter === 'all') return accounts;
+    return accounts.filter((a) => a.status === statusFilter);
+  }, [accounts, statusFilter]);
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.headerRow}>
         <Text style={styles.title}>Accounts</Text>
         <Text style={styles.subtitle}>
-          {loading ? 'Loading…' : `${accounts.length} ${accounts.length === 1 ? 'account' : 'accounts'}`}
+          {loading ? 'Loading…' : `${filteredAccounts.length} ${filteredAccounts.length === 1 ? 'account' : 'accounts'}`}
         </Text>
       </View>
 
@@ -92,6 +126,35 @@ export default function AdminAccountsTab() {
         />
       </View>
 
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chipRow}
+      >
+        {STATUS_FILTERS.map((f) => (
+          <Pressable
+            key={f.key}
+            accessibilityRole="button"
+            accessibilityLabel={`Filter ${f.label}`}
+            onPress={() => setStatusFilter(f.key)}
+            style={({ pressed }) => [
+              styles.chip,
+              statusFilter === f.key && styles.chipActive,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text
+              style={[
+                styles.chipLabel,
+                statusFilter === f.key && styles.chipLabelActive,
+              ]}
+            >
+              {f.label}
+            </Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+
       {loading ? (
         <View style={styles.body}>
           <LoadingState label="Loading accounts…" />
@@ -104,20 +167,20 @@ export default function AdminAccountsTab() {
             onRetry={() => reload()}
           />
         </View>
-      ) : accounts.length === 0 ? (
+      ) : filteredAccounts.length === 0 ? (
         <View style={styles.body}>
           <EmptyState
             title="No accounts found"
             message={
-              query
-                ? `No accounts match "${query}".`
+              query || statusFilter !== 'all'
+                ? `No accounts match your current search or status filter.`
                 : 'Customer accounts will appear here once they are created.'
             }
           />
         </View>
       ) : (
         <FlatList
-          data={accounts}
+          data={filteredAccounts}
           keyExtractor={(a) => a.id}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => (
@@ -126,6 +189,8 @@ export default function AdminAccountsTab() {
                 <AccountRow
                   account={item}
                   holderName={item.full_name}
+                  branchName={item.branch_name}
+                  branchDistrict={item.branch_district}
                 />
               </View>
               <View style={styles.actions}>
@@ -146,31 +211,84 @@ export default function AdminAccountsTab() {
                   disabled={item.status === 'blocked'}
                 />
               </View>
-              {updateError ? <Text style={styles.errLine}>{updateError}</Text> : null}
             </View>
           )}
         />
       )}
 
-      <ConfirmDialog
+      {/* Audit Reason & Status Change Modal */}
+      <Modal
         visible={!!selected && !!nextStatus}
-        title={`Set account to ${nextStatus ?? ''}?`}
-        message={
-          selected
-            ? `Account ${selected.account_number} (${selected.full_name ?? '—'}) will be set to "${nextStatus}". The next status change will re-evaluate their access.`
-            : ''
-        }
-        confirmLabel={`Set ${nextStatus ?? ''}`}
-        destructive={nextStatus === 'blocked'}
-        loading={updating}
-        onConfirm={confirmStatusChange}
-        onCancel={() => {
-          if (updating) return;
-          setSelected(null);
-          setNextStatus(null);
-          setUpdateError(null);
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (!updating) {
+            setSelected(null);
+            setNextStatus(null);
+          }
         }}
-      />
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>
+              Change Account Status to {nextStatus ? nextStatus.toUpperCase() : ''}
+            </Text>
+            <Text style={styles.modalMeta}>
+              Account: {selected?.account_number} ({selected?.full_name ?? '—'})
+            </Text>
+            <Text style={styles.modalNotice}>
+              This action will be logged in the immutable audit log table for bank compliance (FR-ADM-08, TC-15).
+            </Text>
+
+            <Text style={styles.inputLabel}>Reason for status update *</Text>
+            <TextInput
+              style={styles.reasonInput}
+              value={reason}
+              onChangeText={setReason}
+              placeholder="Enter audit reason..."
+              placeholderTextColor={colors.textMuted}
+              multiline
+              numberOfLines={2}
+              editable={!updating}
+            />
+
+            {updateError ? <Text style={styles.modalErr}>{updateError}</Text> : null}
+
+            <View style={styles.modalButtons}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
+                disabled={updating}
+                onPress={() => {
+                  setSelected(null);
+                  setNextStatus(null);
+                  setUpdateError(null);
+                }}
+                style={({ pressed }) => [styles.cancelBtn, pressed && styles.pressed]}
+              >
+                <Text style={styles.cancelText}>Cancel</Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Confirm ${nextStatus ?? ''}`}
+                disabled={updating}
+                onPress={confirmStatusChange}
+                style={({ pressed }) => [
+                  styles.confirmBtn,
+                  nextStatus === 'blocked' && styles.confirmBtnDestructive,
+                  pressed && styles.pressed,
+                  updating && styles.disabled,
+                ]}
+              >
+                <Text style={styles.confirmText}>
+                  {updating ? 'Saving…' : `Set ${nextStatus ?? ''}`}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -224,7 +342,34 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: typography.helper.size, color: colors.textMuted, marginTop: 2 },
   searchRow: {
     paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xs,
+  },
+  chipRow: {
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
     paddingBottom: spacing.sm,
+  },
+  chip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  chipLabel: {
+    fontSize: typography.caption.size,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  chipLabelActive: {
+    color: colors.textOnPrimary,
   },
   list: { paddingBottom: spacing.xl },
   rowWrap: {
@@ -267,10 +412,105 @@ const styles = StyleSheet.create({
   actionLabelDestructive: { color: colors.error },
   actionLabelDisabled: { color: colors.textMuted },
   pressed: { opacity: 0.85 },
+  disabled: { opacity: 0.6 },
   errLine: {
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.sm,
     color: colors.error,
     fontSize: typography.helper.size,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  modalCard: {
+    width: '100%',
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  modalMeta: {
+    fontSize: typography.body.size,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
+  },
+  modalNotice: {
+    fontSize: typography.caption.size,
+    color: colors.primaryDark,
+    backgroundColor: colors.primaryLight,
+    padding: spacing.sm,
+    borderRadius: 8,
+    marginBottom: spacing.md,
+  },
+  inputLabel: {
+    fontSize: typography.label.size,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  reasonInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    padding: spacing.sm,
+    fontSize: typography.body.size,
+    color: colors.text,
+    backgroundColor: colors.surface,
+    minHeight: 60,
+    textAlignVertical: 'top',
+    marginBottom: spacing.md,
+  },
+  modalErr: {
+    color: colors.error,
+    fontSize: typography.caption.size,
+    marginBottom: spacing.sm,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    justifyContent: 'flex-end',
+    marginTop: spacing.xs,
+  },
+  cancelBtn: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  cancelText: {
+    fontSize: typography.body.size,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  confirmBtn: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: 8,
+    backgroundColor: colors.primary,
+  },
+  confirmBtnDestructive: {
+    backgroundColor: colors.error,
+  },
+  confirmText: {
+    fontSize: typography.body.size,
+    fontWeight: '700',
+    color: colors.textOnPrimary,
   },
 });

@@ -323,10 +323,10 @@ $$;
   - Explicit role restriction: Client can never select or submit an administrative role (FR-ADM-01, TC-22).
 
 ### Phase 6: Admin & Teller Portal
-- [ ] Admin Navigation Layout ([app/(admin)/_layout.tsx](file:///c:/banking-app/app/(admin)/_layout.tsx)):
+- [x] Admin Navigation Layout ([app/(admin)/_layout.tsx](file:///c:/banking-app/app/(admin)/_layout.tsx)):
   - Tabs: Overview, Users, Accounts, Branches, Transactions.
   - Quick action: "Branch Cash Deposit" (Staff Operator Workflow).
-- [ ] Staff Simulated Branch Deposit Screen (`app/(admin)/deposit.tsx`):
+- [x] Staff Simulated Branch Deposit Screen (`app/(admin)/deposit.tsx`):
   - Operator workflow (FR-DEP-01..08, TC-11):
     1. Search & select target account (displays recipient name and assigned branch).
     2. Select receiving branch.
@@ -334,13 +334,13 @@ $$;
     4. Operator confirms simulated physical cash was received at counter.
     5. Dispatches `app_deposit` RPC atomically.
     6. Displays confirmation receipt with operator ID and unique reference.
-- [ ] Branch Management Screen (`app/(admin)/branches.tsx`):
+- [x] Branch Management Screen (`app/(admin)/branches.tsx`):
   - Lists all branches with active/inactive status.
   - Modal to create a new branch or toggle branch active status (FR-ADM-06).
-- [ ] Account Status Management ([app/(admin)/(tabs)/accounts.tsx](file:///c:/banking-app/app/(admin)/(tabs)/accounts.tsx)):
+- [x] Account Status Management ([app/(admin)/(tabs)/accounts.tsx](file:///c:/banking-app/app/(admin)/(tabs)/accounts.tsx)):
   - Filter accounts by status (`active`, `inactive`, `blocked`).
   - Action modal to change status with required reason input, logging to `audit_logs` (FR-ADM-04, FR-ADM-08, TC-15).
-- [ ] Transaction Monitoring ([app/(admin)/(tabs)/transactions.tsx](file:///c:/banking-app/app/(admin)/(tabs)/transactions.tsx)):
+- [x] Transaction Monitoring ([app/(admin)/(tabs)/transactions.tsx](file:///c:/banking-app/app/(admin)/(tabs)/transactions.tsx)):
   - Search by transaction reference (`TXN-...`) or account number.
   - Filter by transaction type (`transfer`, `withdrawal`, `deposit`), status, and date range (FR-ADM-05).
 

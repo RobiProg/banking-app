@@ -108,6 +108,40 @@ export default function AdminDashboardScreen() {
           <StatCard label="Total accounts" value={stats.totalAccounts} glyph="▤" />
           <StatCard label="Active accounts" value={stats.activeAccounts} glyph="✓" />
           <StatCard label="Total transactions" value={stats.totalTransactions} glyph="≡" />
+          <StatCard label="Total branches" value={stats.totalBranches ?? 0} glyph="🏛" />
+        </View>
+
+        <View style={styles.quickSection}>
+          <Text style={styles.quickTitle}>Staff Operator Actions</Text>
+          <View style={styles.quickRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Record branch cash deposit"
+              onPress={() => router.push(ROUTES.adminDeposit)}
+              style={({ pressed }) => [styles.quickCard, styles.quickCardPrimary, pressed && styles.pressed]}
+            >
+              <Text style={styles.quickIcon}>💵</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.quickCardTitle}>Branch Cash Deposit</Text>
+                <Text style={styles.quickCardDesc}>Record simulated counter cash intake (FR-DEP-01)</Text>
+              </View>
+              <Text style={styles.quickArrow}>→</Text>
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Manage branches"
+              onPress={() => router.push(ROUTES.adminBranches)}
+              style={({ pressed }) => [styles.quickCard, pressed && styles.pressed]}
+            >
+              <Text style={styles.quickIcon}>🏛</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.quickCardTitle}>Branch Network</Text>
+                <Text style={styles.quickCardDesc}>Manage 8+ Bangladesh regional branches (FR-ADM-06)</Text>
+              </View>
+              <Text style={styles.quickArrow}>→</Text>
+            </Pressable>
+          </View>
         </View>
 
         <Text style={styles.helper}>
@@ -165,6 +199,49 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.md,
+  },
+  quickSection: {
+    gap: spacing.sm,
+  },
+  quickTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  quickRow: {
+    gap: spacing.sm,
+  },
+  quickCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    padding: spacing.md,
+    gap: spacing.md,
+  },
+  quickCardPrimary: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
+  },
+  quickIcon: {
+    fontSize: 24,
+  },
+  quickCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  quickCardDesc: {
+    fontSize: typography.caption.size,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  quickArrow: {
+    fontSize: 18,
+    color: colors.primaryDark,
+    fontWeight: '700',
   },
   helper: { fontSize: typography.helper.size, color: colors.textMuted },
 });

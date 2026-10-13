@@ -10,6 +10,10 @@ type Props = {
   account: Account;
   /** Optional holder info shown under the account number. */
   holderName?: string | null;
+  /** Optional assigned branch name. */
+  branchName?: string | null;
+  /** Optional assigned branch district. */
+  branchDistrict?: string | null;
   onPress?: () => void;
 };
 
@@ -17,7 +21,11 @@ type Props = {
  * Row used in the admin accounts list. Tap → opens the status-change
  * dialog (handled at the screen level).
  */
-export function AccountRow({ account, holderName, onPress }: Props) {
+export function AccountRow({ account, holderName, branchName, branchDistrict, onPress }: Props) {
+  const branchLabel = branchName
+    ? `${branchName}${branchDistrict ? ` (${branchDistrict})` : ''}`
+    : null;
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -30,6 +38,11 @@ export function AccountRow({ account, holderName, onPress }: Props) {
         {holderName ? (
           <Text style={styles.meta} numberOfLines={1}>
             {holderName}
+          </Text>
+        ) : null}
+        {branchLabel ? (
+          <Text style={styles.branchMeta} numberOfLines={1}>
+            Branch: {branchLabel}
           </Text>
         ) : null}
         <View style={styles.statusRow}>
@@ -73,6 +86,7 @@ const styles = StyleSheet.create({
   middle: { flex: 1, paddingRight: spacing.sm },
   number: { fontSize: typography.body.size, fontWeight: '700', color: colors.text },
   meta: { fontSize: typography.helper.size, color: colors.textMuted, marginTop: 2 },
+  branchMeta: { fontSize: typography.caption.size, color: colors.primary, marginTop: 2, fontWeight: '500' },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs + 2 },
   typeLabel: {
     fontSize: 10,
