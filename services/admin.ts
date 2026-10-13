@@ -1,24 +1,26 @@
 import { supabase } from '../lib/supabase';
 import { mapAuthError } from './auth';
 import { mapRpcError } from './transactions';
-import type { Account, AccountStatus, Profile, Transaction, TransactionType } from '../types/db';
+import type { Account, AccountStatus, AuditLog, Branch, Profile, Transaction, TransactionType } from '../types/db';
 
-// ---------- stats ----------
+// ---------- Stats ----------
 
 export type AdminStats = {
   totalUsers: number;
   totalAccounts: number;
   activeAccounts: number;
   totalTransactions: number;
+  totalBranches?: number;
 };
 
 export async function getAdminStats(): Promise<{ stats: AdminStats | null; errorMessage: string | null }> {
   try {
-    const [users, accounts, activeAccounts, txns] = await Promise.all([
+    const [users, accounts, activeAccounts, txns, branches] = await Promise.all([
       supabase.from('profiles').select('id', { count: 'exact', head: true }),
       supabase.from('accounts').select('id', { count: 'exact', head: true }),
       supabase.from('accounts').select('id', { count: 'exact', head: true }).eq('status', 'active'),
       supabase.from('transactions').select('id', { count: 'exact', head: true }),
+      supabase.from('branches').select('id', { count: 'exact', head: true }),
     ]);
 
     const firstErr = users.error ?? accounts.error ?? activeAccounts.error ?? txns.error;
@@ -32,6 +34,7 @@ export async function getAdminStats(): Promise<{ stats: AdminStats | null; error
         totalAccounts: accounts.count ?? 0,
         activeAccounts: activeAccounts.count ?? 0,
         totalTransactions: txns.count ?? 0,
+        totalBranches: branches.count ?? 0,
       },
       errorMessage: null,
     };
@@ -42,7 +45,7 @@ export async function getAdminStats(): Promise<{ stats: AdminStats | null; error
   }
 }
 
-// ---------- users ----------
+// ---------- Users ----------
 
 export type AdminUserRow = Profile & {
   account_number: string | null;
@@ -59,10 +62,12 @@ export async function listUsers(
       .select('id, full_name, email, phone, role, created_at, accounts(account_number, status, balance)')
       .order('created_at', { ascending: false })
       .limit(200);
+
     if (query.trim()) {
       const term = `%${query.trim()}%`;
       q = q.or(`full_name.ilike.${term},email.ilike.${term},phone.ilike.${term}`);
     }
+
     const { data, error } = await q;
     if (error) return { users: [], errorMessage: mapAuthError(error.message) };
 
@@ -100,8 +105,10 @@ export async function getUserById(
       .select('id, full_name, email, phone, role, created_at, accounts(account_number, status, balance)')
       .eq('id', id)
       .maybeSingle();
+
     if (error) return { user: null, errorMessage: mapAuthError(error.message) };
     if (!data) return { user: null, errorMessage: 'User not found.' };
+
     type Joined = Profile & {
       accounts: Array<{ account_number: string; status: AccountStatus; balance?: number | string }> | { account_number: string; status: AccountStatus; balance?: number | string } | null;
     };
@@ -128,11 +135,13 @@ export async function getUserById(
   }
 }
 
-// ---------- accounts ----------
+// ---------- Accounts ----------
 
 export type AdminAccountRow = Account & {
   full_name: string | null;
   email: string | null;
+  branch_name?: string | null;
+  branch_district?: string | null;
 };
 
 export async function listAccounts(
@@ -141,24 +150,32 @@ export async function listAccounts(
   try {
     let q = supabase
       .from('accounts')
-      .select('id, user_id, account_number, account_type, balance, status, created_at, profiles(full_name, email)')
+      .select('id, user_id, branch_id, account_number, account_type, balance, status, created_at, profiles(full_name, email), branches(name, district)')
       .order('created_at', { ascending: false })
       .limit(200);
+
     if (query.trim()) {
       const term = `%${query.trim()}%`;
       q = q.or(`account_number.ilike.${term}`);
     }
+
     const { data, error } = await q;
     if (error) return { accounts: [], errorMessage: mapAuthError(error.message) };
+
     type Joined = Account & {
       profiles: Array<{ full_name: string; email: string }> | { full_name: string; email: string } | null;
+      branches: Array<{ name: string; district: string }> | { name: string; district: string } | null;
     };
+
     const rows: AdminAccountRow[] = ((data ?? []) as unknown as Joined[]).map((r) => {
       const p = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles;
+      const b = Array.isArray(r.branches) ? r.branches[0] : r.branches;
       return {
         ...r,
         full_name: p?.full_name ?? null,
         email: p?.email ?? null,
+        branch_name: b?.name ?? null,
+        branch_district: b?.district ?? null,
       };
     });
     return { accounts: rows, errorMessage: null };
@@ -169,25 +186,70 @@ export async function listAccounts(
   }
 }
 
-export async function adminUpdateAccountStatus(
+/**
+ * Admin updates account status with required audit logging (FR-ADM-04, FR-ADM-08, TC-15).
+ */
+export async function adminSetAccountStatus(
   accountId: string,
   status: AccountStatus,
+  reason = 'Admin status update',
 ): Promise<{ account: Account | null; errorMessage: string | null }> {
   try {
-    const { data, error } = await supabase.rpc('admin_update_account_status', {
+    const { data, error } = await supabase.rpc('admin_set_account_status', {
       p_account_id: accountId,
       p_status: status,
+      p_reason: reason,
     });
     if (error) return { account: null, errorMessage: mapRpcError(error.message) };
     return { account: data as Account, errorMessage: null };
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.warn('[admin] adminUpdateAccountStatus threw:', err);
+    console.warn('[admin] adminSetAccountStatus threw:', err);
     return { account: null, errorMessage: 'Something went wrong. Please try again.' };
   }
 }
 
-// ---------- transactions ----------
+/** Legacy alias */
+export async function adminUpdateAccountStatus(
+  accountId: string,
+  status: AccountStatus,
+): Promise<{ account: Account | null; errorMessage: string | null }> {
+  return adminSetAccountStatus(accountId, status);
+}
+
+// ---------- Staff Branch Deposit (FR-DEP-01..08, TC-11) ----------
+
+export type StaffDepositParams = {
+  accountNumber: string;
+  branchId: string;
+  amount: number;
+  note?: string | null;
+  idempotencyKey?: string | null;
+};
+
+export async function recordBranchDeposit(
+  params: StaffDepositParams,
+): Promise<{ transaction: Transaction | null; errorMessage: string | null }> {
+  try {
+    const key = params.idempotencyKey || `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    const { data, error } = await supabase.rpc('app_deposit', {
+      p_target_account_number: params.accountNumber.trim().toUpperCase(),
+      p_branch_id: params.branchId,
+      p_amount: params.amount,
+      p_reference_note: params.note ?? null,
+      p_idempotency_key: key,
+    });
+
+    if (error) return { transaction: null, errorMessage: mapRpcError(error.message) };
+    return { transaction: data as Transaction, errorMessage: null };
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[admin] recordBranchDeposit threw:', err);
+    return { transaction: null, errorMessage: 'Something went wrong. Please try again.' };
+  }
+}
+
+// ---------- Transactions Monitoring ----------
 
 export type AdminTxnFilters = {
   type?: TransactionType;
@@ -202,22 +264,57 @@ export async function listAllTransactions(
   try {
     let q = supabase
       .from('transactions')
-      .select('*')
+      .select('*, branches(name, district, branch_code)')
       .order('created_at', { ascending: false })
       .limit(limit);
-    if (filters.type) q = q.eq('transaction_type', filters.type);
-    if (filters.status) q = q.eq('status', filters.status);
-    // Note: search by account_number requires a join; we keep this simple
-    // and let the admin use the transaction id instead.
-    if (filters.search && filters.search.trim()) {
-      q = q.or(`id.eq.${filters.search.trim()},description.ilike.%${filters.search.trim()}%`);
+
+    if (filters.type) {
+      q = q.or(`type.eq.${filters.type},transaction_type.eq.${filters.type}`);
     }
+    if (filters.status) q = q.eq('status', filters.status);
+
+    if (filters.search && filters.search.trim()) {
+      const term = filters.search.trim();
+      q = q.or(`reference.ilike.%${term}%,description.ilike.%${term}%,id.eq.${term}`);
+    }
+
     const { data, error } = await q;
     if (error) return { transactions: [], errorMessage: mapAuthError(error.message) };
-    return { transactions: (data as Transaction[]) ?? [], errorMessage: null };
+
+    const normalized = ((data ?? []) as unknown as Array<Transaction & { transaction_type?: TransactionType; type?: TransactionType }>).map((t) => {
+      const effType = (t.type ?? t.transaction_type ?? 'transfer') as TransactionType;
+      return {
+        ...t,
+        type: effType,
+        transaction_type: effType,
+      };
+    });
+
+    return { transactions: normalized, errorMessage: null };
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[admin] listAllTransactions threw:', err);
     return { transactions: [], errorMessage: 'Something went wrong. Please try again.' };
+  }
+}
+
+// ---------- Audit Logs Monitoring (FR-ADM-08) ----------
+
+export async function listAuditLogs(
+  limit = 100,
+): Promise<{ logs: AuditLog[]; errorMessage: string | null }> {
+  try {
+    const { data, error } = await supabase
+      .from('audit_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) return { logs: [], errorMessage: mapAuthError(error.message) };
+    return { logs: (data as AuditLog[]) ?? [], errorMessage: null };
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[admin] listAuditLogs threw:', err);
+    return { logs: [], errorMessage: 'Something went wrong. Please try again.' };
   }
 }

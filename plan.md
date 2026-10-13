@@ -263,21 +263,21 @@ $$;
   - Remove customer `deposit` route.
 
 ### Phase 3: Service Layer Overhaul
-- [ ] Update [services/auth.ts](file:///c:/banking-app/services/auth.ts):
+- [x] Update [services/auth.ts](file:///c:/banking-app/services/auth.ts):
   - Add `resetPasswordForEmail(email: string)`.
   - Update `signUp` to optionally accept `branchId` in metadata for branch assignment.
-- [ ] Update [services/accounts.ts](file:///c:/banking-app/services/accounts.ts):
+- [x] Update [services/accounts.ts](file:///c:/banking-app/services/accounts.ts):
   - Add `lookupRecipient(accountNumber: string)` calling `lookup_recipient` RPC.
   - Update `getMyAccount()` to join branch details (`branches(name, district, branch_code)`).
-- [ ] Update [services/transactions.ts](file:///c:/banking-app/services/transactions.ts):
+- [x] Update [services/transactions.ts](file:///c:/banking-app/services/transactions.ts):
   - Replace `transferMoney` with `appTransfer({ recipientAccountNumber, amount, description, idempotencyKey })` calling `app_transfer` RPC.
   - Replace `withdrawFunds` with `appWithdraw({ amount, idempotencyKey })` calling `app_withdraw` RPC.
   - Remove customer `depositFunds` export.
   - Add friendly error code mapping for all stable Postgres RPC exceptions (`INSUFFICIENT_FUNDS`, `RECIPIENT_NOT_FOUND`, `SELF_TRANSFER`, `INVALID_AMOUNT`, `SENDER_NOT_ACTIVE`, `RECIPIENT_NOT_ACTIVE`, `NOT_AUTHORIZED`).
-- [ ] Create `services/branches.ts`:
+- [x] Create `services/branches.ts`:
   - `listActiveBranches()`: Fetches active branches for registration and transfer preview.
   - `adminListBranches()`, `adminCreateBranch()`, `adminUpdateBranch()`.
-- [ ] Update [services/admin.ts](file:///c:/banking-app/services/admin.ts):
+- [x] Update [services/admin.ts](file:///c:/banking-app/services/admin.ts):
   - Add `recordBranchDeposit({ accountNumber, branchId, amount, note, idempotencyKey })` calling `app_deposit`.
   - Add `adminSetAccountStatus(accountId, status, reason)` with audit logging.
   - Add `adminListAuditLogs(limit, offset)`.

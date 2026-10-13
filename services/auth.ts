@@ -17,6 +17,7 @@ export type SignUpParams = {
   phone: string;
   email: string;
   password: string;
+  branchId?: string | null;
 };
 
 export type AuthResult = {
@@ -114,17 +115,17 @@ export async function signUp({
   phone,
   email,
   password,
+  branchId,
 }: SignUpParams): Promise<AuthResult> {
   try {
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
       options: {
-        // Stash the additional fields in user_metadata so we can use them
-        // later when we create the `profiles` row (Phase 6).
         data: {
           full_name: fullName.trim(),
           phone: phone.trim(),
+          ...(branchId ? { branch_id: branchId } : {}),
         },
       },
     });
@@ -144,6 +145,25 @@ export async function signUp({
       session: null,
       errorMessage: 'Something went wrong. Please try again.',
     };
+  }
+}
+
+/**
+ * Send password reset email via Supabase Auth (FR-AUTH-04, TC-19).
+ */
+export async function resetPasswordForEmail(
+  email: string,
+): Promise<{ ok: boolean; errorMessage: string | null }> {
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
+    if (error) {
+      return { ok: false, errorMessage: mapAuthError(error.message) };
+    }
+    return { ok: true, errorMessage: null };
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[auth] resetPasswordForEmail threw:', err);
+    return { ok: false, errorMessage: 'Something went wrong. Please try again.' };
   }
 }
 

@@ -3,27 +3,41 @@ import { mapAuthError } from './auth';
 import type { Transaction, TransactionType } from '../types/db';
 
 /**
+ * Generate a client UUID idempotency key (design.md §6.4).
+ */
+export function generateIdempotencyKey(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+/**
  * Map raw RPC error text to a friendly user-facing message.
- *
- * The SmartBank RPCs raise Postgres exceptions with stable `message`
- * codes like `insufficient_balance`, `invalid_amount`, etc. (See
- * `supabase/README.md` for the full list.) We match on those codes,
- * with a substring fallback for the rare case Supabase wraps them
- * differently.
+ * Matches design.md §8 and SRS v2.1 table.
  */
 export function mapRpcError(raw: string): string {
   const code = raw.toLowerCase();
-  if (code.includes('invalid_amount')) return 'Please enter a valid amount.';
-  if (code.includes('insufficient_balance')) return 'Insufficient balance.';
-  if (code.includes('no_account')) return 'No bank account found. Please contact support.';
-  if (code.includes('account_inactive')) return 'Your account is inactive.';
-  if (code.includes('recipient_inactive')) return 'Recipient account is inactive.';
-  if (code.includes('recipient_not_found')) return 'Recipient account not found.';
-  if (code.includes('self_transfer')) return 'You cannot transfer to your own account.';
+  if (code.includes('recipient_not_found')) return 'No SmartBank account found for that number.';
+  if (code.includes('insufficient_balance') || code.includes('insufficient_funds')) {
+    return "You don't have enough balance for this transfer.";
+  }
+  if (code.includes('self_transfer')) return "You can't transfer to your own account.";
+  if (code.includes('invalid_amount')) return 'Enter a valid amount (up to two decimals, max ৳500,000).';
+  if (code.includes('no_account') || code.includes('no_sender_account')) {
+    return 'No bank account linked to your profile yet.';
+  }
+  if (code.includes('account_inactive') || code.includes('sender_not_active')) {
+    return 'Your account is inactive or blocked.';
+  }
+  if (code.includes('recipient_inactive') || code.includes('recipient_not_active')) {
+    return 'Recipient account is inactive or blocked.';
+  }
   if (code.includes('not_authorized')) return 'You are not authorized to perform this action.';
+  if (code.includes('customer_deposit_disabled')) {
+    return 'Customer self-deposit is disabled. Deposits must be made at an authorized branch counter.';
+  }
+  if (code.includes('branch_not_found')) return 'The specified branch is invalid or inactive.';
   if (code.includes('invalid_status')) return 'Invalid status.';
   if (code.includes('account_not_found')) return 'Account not found.';
-  // Network / generic
+  // Network / timeout
   if (
     code.includes('network') ||
     code.includes('fetch') ||
@@ -31,17 +45,14 @@ export function mapRpcError(raw: string): string {
     code.includes('failed to fetch') ||
     code.includes('aborted')
   ) {
-    return "We couldn't reach the server. Check your connection and try again.";
+    return "Couldn't reach the server. We'll retry safely.";
   }
   return mapAuthError(raw);
 }
 
-// ---------- query helpers ----------
+// ---------- Query Helpers ----------
 
 export type ListTxnsParams = {
-  /** When provided, restricts results to transactions where the
-   *  signed-in user's account is sender OR receiver. Always used by
-   *  the customer tabs. */
   forMyAccount?: boolean;
   type?: TransactionType;
   limit?: number;
@@ -58,17 +69,29 @@ export async function listTransactions(
   try {
     let q = supabase
       .from('transactions')
-      .select('*')
+      .select('*, branches(name, district, branch_code)')
       .order('created_at', { ascending: false })
       .limit(params.limit ?? 100);
 
-    if (params.type) q = q.eq('transaction_type', params.type);
+    if (params.type) {
+      q = q.or(`type.eq.${params.type},transaction_type.eq.${params.type}`);
+    }
 
     const { data, error } = await q;
     if (error) {
       return { transactions: [], errorMessage: mapAuthError(error.message) };
     }
-    return { transactions: (data as Transaction[]) ?? [], errorMessage: null };
+
+    const normalized = ((data ?? []) as unknown as Array<Transaction & { transaction_type?: TransactionType; type?: TransactionType }>).map((t) => {
+      const effType = (t.type ?? t.transaction_type ?? 'transfer') as TransactionType;
+      return {
+        ...t,
+        type: effType,
+        transaction_type: effType,
+      };
+    });
+
+    return { transactions: normalized, errorMessage: null };
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[transactions] listTransactions threw:', err);
@@ -82,13 +105,25 @@ export async function getTransactionById(
   try {
     const { data, error } = await supabase
       .from('transactions')
-      .select('*')
+      .select('*, branches(name, district, branch_code)')
       .eq('id', id)
       .maybeSingle();
+
     if (error) {
       return { transaction: null, errorMessage: mapAuthError(error.message) };
     }
-    return { transaction: (data as Transaction) ?? null, errorMessage: null };
+    if (!data) return { transaction: null, errorMessage: 'Transaction not found.' };
+
+    const t = data as unknown as Transaction & { transaction_type?: TransactionType; type?: TransactionType };
+    const effType = (t.type ?? t.transaction_type ?? 'transfer') as TransactionType;
+    return {
+      transaction: {
+        ...t,
+        type: effType,
+        transaction_type: effType,
+      },
+      errorMessage: null,
+    };
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[transactions] getTransactionById threw:', err);
@@ -98,7 +133,6 @@ export async function getTransactionById(
 
 /**
  * Subscribe to new/updated transactions for the given account.
- * Used by the customer transactions tab.
  */
 export function subscribeToMyTransactions(
   myAccountId: string,
@@ -127,53 +161,88 @@ export function subscribeToMyTransactions(
   };
 }
 
-// ---------- RPC wrappers (financial ops) ----------
+// ---------- RPC Wrappers (Financial Operations) ----------
 
 export type FinancialOpResult = {
   transaction: Transaction | null;
   errorMessage: string | null;
 };
 
-export async function depositFunds(amount: number): Promise<FinancialOpResult> {
+export type AppTransferParams = {
+  recipientAccountNumber: string;
+  amount: number;
+  description?: string | null;
+  idempotencyKey?: string | null;
+};
+
+/**
+ * Execute atomic internal transfer (FR-TRF-01..13, design.md §5.1, TC-03, TC-08, TC-13).
+ */
+export async function appTransfer(params: AppTransferParams): Promise<FinancialOpResult> {
   try {
-    const { data, error } = await supabase.rpc('deposit_funds', { p_amount: amount });
+    const idempotencyKey = params.idempotencyKey || generateIdempotencyKey();
+    const { data, error } = await supabase.rpc('app_transfer', {
+      p_recipient_account_number: params.recipientAccountNumber.trim().toUpperCase(),
+      p_amount: params.amount,
+      p_description: params.description ?? null,
+      p_idempotency_key: idempotencyKey,
+    });
+
     if (error) return { transaction: null, errorMessage: mapRpcError(error.message) };
     return { transaction: data as Transaction, errorMessage: null };
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.warn('[transactions] depositFunds threw:', err);
+    console.warn('[transactions] appTransfer threw:', err);
     return { transaction: null, errorMessage: 'Something went wrong. Please try again.' };
   }
 }
 
-export async function withdrawFunds(amount: number): Promise<FinancialOpResult> {
-  try {
-    const { data, error } = await supabase.rpc('withdraw_funds', { p_amount: amount });
-    if (error) return { transaction: null, errorMessage: mapRpcError(error.message) };
-    return { transaction: data as Transaction, errorMessage: null };
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.warn('[transactions] withdrawFunds threw:', err);
-    return { transaction: null, errorMessage: 'Something went wrong. Please try again.' };
-  }
-}
-
+/** Legacy alias for appTransfer */
 export async function transferMoney(
   recipientAccountNumber: string,
   amount: number,
   description: string | null,
 ): Promise<FinancialOpResult> {
+  return appTransfer({ recipientAccountNumber, amount, description });
+}
+
+export type AppWithdrawParams = {
+  amount: number;
+  idempotencyKey?: string | null;
+};
+
+/**
+ * Execute atomic simulated withdrawal (FR-WD-01..06, design.md §5.2, TC-16, TC-17).
+ */
+export async function appWithdraw(params: AppWithdrawParams): Promise<FinancialOpResult> {
   try {
-    const { data, error } = await supabase.rpc('transfer_money', {
-      p_recipient_account_number: recipientAccountNumber,
-      p_amount: amount,
-      p_description: description,
+    const idempotencyKey = params.idempotencyKey || generateIdempotencyKey();
+    const { data, error } = await supabase.rpc('app_withdraw', {
+      p_amount: params.amount,
+      p_idempotency_key: idempotencyKey,
     });
+
     if (error) return { transaction: null, errorMessage: mapRpcError(error.message) };
     return { transaction: data as Transaction, errorMessage: null };
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.warn('[transactions] transferMoney threw:', err);
+    console.warn('[transactions] appWithdraw threw:', err);
     return { transaction: null, errorMessage: 'Something went wrong. Please try again.' };
   }
+}
+
+/** Legacy alias for appWithdraw */
+export async function withdrawFunds(amount: number): Promise<FinancialOpResult> {
+  return appWithdraw({ amount });
+}
+
+/**
+ * Notice: Customer self-deposit is disabled under SRS v2.1 BR-01 / FR-DEP-01.
+ * Deposits must be entered by an authorized teller at a branch.
+ */
+export async function depositFunds(_amount: number): Promise<FinancialOpResult> {
+  return {
+    transaction: null,
+    errorMessage: 'Customer self-deposit is disabled. Cash deposits must be conducted through an authorized branch teller.',
+  };
 }

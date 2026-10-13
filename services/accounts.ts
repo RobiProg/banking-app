@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { mapRpcError } from './transactions';
-import type { Account } from '../types/db';
+import type { Account, Branch, RecipientLookupInfo } from '../types/db';
 
 export type AccountResult = {
   account: Account | null;
@@ -8,19 +8,64 @@ export type AccountResult = {
 };
 
 /**
- * Fetch the signed-in user's bank account.
- * Uses the `get_my_account()` RPC so the user cannot accidentally
- * read another customer's row even if the session user_id is stale.
+ * Fetch the signed-in user's bank account with linked branch details.
+ * (FR-ACC-01, FR-ACC-03, FR-BR-01)
  */
 export async function getMyAccount(): Promise<AccountResult> {
   try {
-    const { data, error } = await supabase.rpc('get_my_account');
-    if (error) {
-      return { account: null, errorMessage: mapRpcError(error.message) };
+    const { data: userData, error: userErr } = await supabase.auth.getUser();
+    if (userErr || !userData.user) {
+      return { account: null, errorMessage: 'Please sign in to view your account.' };
     }
-    // RPC returns a single row.
-    const row = Array.isArray(data) ? data[0] : (data as Account);
-    return { account: (row as Account) ?? null, errorMessage: null };
+
+    const { data, error } = await supabase
+      .from('accounts')
+      .select('id, user_id, branch_id, account_number, account_type, balance, status, created_at, branches(*)')
+      .eq('user_id', userData.user.id)
+      .maybeSingle();
+
+    if (error) {
+      // Fallback to RPC if RLS select was constrained
+      const { data: rpcData, error: rpcErr } = await supabase.rpc('get_my_account');
+      if (rpcErr) {
+        return { account: null, errorMessage: mapRpcError(rpcErr.message) };
+      }
+      const row = Array.isArray(rpcData) ? rpcData[0] : (rpcData as Account);
+      return { account: (row as Account) ?? null, errorMessage: null };
+    }
+
+    if (!data) {
+      // Try self-healing profile and account creation
+      const { error: healErr } = await supabase.rpc('ensure_user_profile');
+      if (!healErr) {
+        const retry = await supabase
+          .from('accounts')
+          .select('id, user_id, branch_id, account_number, account_type, balance, status, created_at, branches(*)')
+          .eq('user_id', userData.user.id)
+          .maybeSingle();
+        if (retry.data) {
+          const joined = retry.data as unknown as Account & { branches: Branch | null };
+          return {
+            account: {
+              ...joined,
+              branch: joined.branches ?? null,
+            },
+            errorMessage: null,
+          };
+        }
+      }
+      return { account: null, errorMessage: 'No bank account found. Please contact support.' };
+    }
+
+    type JoinedAccount = Account & { branches: Branch | null };
+    const joined = data as unknown as JoinedAccount;
+    return {
+      account: {
+        ...joined,
+        branch: joined.branches ?? null,
+      },
+      errorMessage: null,
+    };
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[accounts] getMyAccount threw:', err);
@@ -29,67 +74,68 @@ export async function getMyAccount(): Promise<AccountResult> {
 }
 
 /**
- * Look up an account by its account number. Returns a sanitised
- * version (no user_id, just the account_number + status) so the
- * send-money screen can validate the recipient without leaking
- * private fields. Uses the lookup_account SECURITY DEFINER RPC.
+ * Look up a recipient account for Send Money (FR-TRF-02, NFR-SEC-05, TC-21).
+ * Returns verified confirmation details with minimal disclosure:
+ *  - Abbreviated name (e.g. "Md. R***")
+ *  - Masked account number ("••••••4821")
+ *  - Branch name & district
+ *  - Account eligibility
+ * Never exposes the recipient's full legal name or user_id.
  */
-export type PublicAccountInfo = {
-  account_number: string;
-  status: Account['status'];
-};
-
-export async function lookupAccount(
+export async function lookupRecipient(
   accountNumber: string,
-): Promise<{ info: PublicAccountInfo | null; errorMessage: string | null }> {
+): Promise<{ info: RecipientLookupInfo | null; errorMessage: string | null }> {
   const trimmed = accountNumber.trim().toUpperCase();
   if (!trimmed) return { info: null, errorMessage: null };
   try {
-    // 1. Try secure lookup_account RPC
-    const { data: rpcData, error: rpcErr } = await supabase.rpc('lookup_account', {
+    const { data, error } = await supabase.rpc('lookup_recipient', {
       p_account_number: trimmed,
     });
 
-    if (!rpcErr) {
-      if (!rpcData) {
-        return { info: null, errorMessage: 'No account exists with that account number.' };
-      }
-      return { info: rpcData as PublicAccountInfo, errorMessage: null };
+    if (error) {
+      return { info: null, errorMessage: mapRpcError(error.message) };
     }
 
-    // 2. Direct query fallback (works for admins or when RLS allows)
-    const { data, error } = await supabase
-      .from('accounts')
-      .select('account_number,status')
-      .eq('account_number', trimmed)
-      .maybeSingle();
-
-    if (!error && data) {
-      return { info: data as PublicAccountInfo, errorMessage: null };
+    if (!data) {
+      return { info: null, errorMessage: 'No SmartBank account found for that number.' };
     }
 
-    // 3. If direct select is blocked by customer RLS and RPC isn't deployed yet,
-    // validate format so the user is not stuck. transfer_money RPC will perform
-    // atomic recipient existence check.
-    if (/^AC\d{5,}$/i.test(trimmed)) {
-      return {
-        info: { account_number: trimmed, status: 'active' },
-        errorMessage: null,
-      };
-    }
-
-    return { info: null, errorMessage: 'No account exists with that account number.' };
+    return { info: data as RecipientLookupInfo, errorMessage: null };
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.warn('[accounts] lookupAccount threw:', err);
+    console.warn('[accounts] lookupRecipient threw:', err);
     return { info: null, errorMessage: 'Something went wrong. Please try again.' };
   }
 }
 
 /**
+ * Backward compatibility alias for lookupRecipient.
+ */
+export async function lookupAccount(
+  accountNumber: string,
+): Promise<{
+  info: { account_number: string; status: Account['status']; abbreviated_name?: string; branch_name?: string } | null;
+  errorMessage: string | null;
+}> {
+  const res = await lookupRecipient(accountNumber);
+  if (res.errorMessage || !res.info) {
+    return { info: null, errorMessage: res.errorMessage };
+  }
+  return {
+    info: {
+      account_number: res.info.account_number,
+      status: res.info.status,
+      abbreviated_name: res.info.abbreviated_name,
+      branch_name: res.info.branch_name,
+    },
+    errorMessage: null,
+  };
+}
+
+/**
  * Subscribe to changes on the current user's account row. Used by
- * the dashboard so balance updates from any source (deposit /
- * withdraw / transfer) appear immediately.
+ * the dashboard so balance updates from any source (transfer /
+ * withdraw / deposit) appear immediately.
  */
 export function subscribeToMyAccount(
   myAccountId: string,
