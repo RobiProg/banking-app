@@ -1,8 +1,8 @@
 /**
- * Pure formatting helpers. No React, no Supabase.
+ * Pure formatting and banking validation helpers. No React, no Supabase.
  *
- * - Currency: ৳ (Taka), used in plan.md examples. Switch to '$' or
- *   '€' here if your project needs a different currency.
+ * - Currency: ৳ (Bangladeshi Taka), stored as NUMERIC(18,2).
+ * - Numbers always formatted with standard comma separators (e.g. ৳25,000.00).
  * - Dates use `en-GB` short month names for compact UI rows.
  */
 
@@ -43,11 +43,25 @@ export function formatSignedBDT(value: string | number | null | undefined, sign:
   return sign === 'positive' ? `+${abs}` : `-${abs}`;
 }
 
-/** Returns the last 4 chars of an account number, prefixed with bullets. */
-export function maskAccountNumber(accountNumber: string): string {
-  if (!accountNumber) return '•••• ••••';
-  const last4 = accountNumber.slice(-4);
-  return `•••• ${last4}`;
+/** Returns masked account number: e.g. "••••••0001" or "•••• 0001" (FR-TRF-02). */
+export function maskAccountNumber(accountNumber: string | null | undefined): string {
+  if (!accountNumber) return '••••••••';
+  const clean = accountNumber.trim();
+  if (clean.length <= 4) return `••••${clean}`;
+  return `${'•'.repeat(clean.length - 4)}${clean.slice(-4)}`;
+}
+
+/**
+ * Abbreviate name to prevent full account enumeration (FR-TRF-02, NFR-SEC-05, TC-21).
+ * E.g. "Md. Robiul Islam" -> "Md. R***", "Rahim Uddin" -> "Rahim U***"
+ */
+export function abbreviateName(name: string | null | undefined): string {
+  if (!name || !name.trim()) return 'Customer';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) {
+    return `${parts[0][0]}***`;
+  }
+  return `${parts[0]} ${parts[1][0]}***`;
 }
 
 /** "8 Oct 2026, 14:32" — used in transaction rows. */
@@ -133,12 +147,32 @@ export function initialsFromName(name: string | null | undefined): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-/** Validate that a free-text amount is a positive number with at most 2 dp. */
-export function isValidAmountInput(raw: string): { ok: boolean; value?: number; message?: string } {
+/**
+ * Validate banking transaction amount (FR-TRF-13, TC-23):
+ * - Positive number
+ * - At most 2 decimal places (no 3+ decimals)
+ * - Maximum transaction cap (৳500,000)
+ */
+export function isValidBankingAmount(
+  raw: string,
+  maxLimit = 500000,
+): { ok: boolean; value?: number; message?: string } {
   const t = raw.trim();
   if (!t) return { ok: false, message: 'Please enter an amount.' };
-  if (!/^\d+(\.\d{1,2})?$/.test(t)) return { ok: false, message: 'Enter a valid amount (e.g. 100 or 100.50).' };
+  if (!/^\d+(\.\d{1,2})?$/.test(t)) {
+    return { ok: false, message: 'Enter a valid amount with at most two decimal places (e.g. 500 or 500.50).' };
+  }
   const n = Number(t);
-  if (!Number.isFinite(n) || n <= 0) return { ok: false, message: 'Amount must be greater than zero.' };
+  if (!Number.isFinite(n) || n <= 0) {
+    return { ok: false, message: 'Amount must be greater than zero.' };
+  }
+  if (n > maxLimit) {
+    return { ok: false, message: `Amount exceeds the maximum transfer limit of ${formatBDT(maxLimit)}.` };
+  }
   return { ok: true, value: n };
+}
+
+/** Validate that a free-text amount is a positive number with at most 2 dp (alias). */
+export function isValidAmountInput(raw: string): { ok: boolean; value?: number; message?: string } {
+  return isValidBankingAmount(raw);
 }

@@ -2,13 +2,13 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../../constants/colors';
 import { spacing, typography } from '../../constants/layout';
-import type { AccountStatus } from '../../types/db';
+import type { AccountStatus, UserRole } from '../../types/db';
 import { initialsFromName } from '../../utils/format';
 
 type Props = {
   fullName: string;
   email: string | null;
-  role: 'customer' | 'admin';
+  role: UserRole;
   accountNumber: string | null;
   accountStatus: AccountStatus | null;
   onPress?: () => void;

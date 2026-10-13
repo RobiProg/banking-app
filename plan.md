@@ -247,18 +247,18 @@ $$;
   - 1 demo administrator/teller account (`admin@smartbank.test`).
 
 ### Phase 2: TypeScript Types & Core Infrastructure
-- [ ] Update [types/db.ts](file:///c:/banking-app/types/db.ts):
+- [x] Update [types/db.ts](file:///c:/banking-app/types/db.ts):
   - Add `Branch` and `AuditLog` types.
   - Update `UserRole` to `'customer' | 'teller' | 'admin'`.
   - Update `Account` with `branch_id` and optional joined `branch: Branch`.
   - Update `Transaction` with `reference`, `type` (`transfer` | `withdrawal` | `deposit`), `branch_id`, `initiated_by`, `idempotency_key`.
   - Add `RecipientLookupInfo` type (`abbreviated_name`, `masked_account_number`, `branch_name`, `district`, `account_type`, `eligible`).
-- [ ] Update [utils/format.ts](file:///c:/banking-app/utils/format.ts):
+- [x] Update [utils/format.ts](file:///c:/banking-app/utils/format.ts):
   - Ensure Bangladeshi Taka (৳) formatting helper `formatBDT` formats standard Bengali/international comma groupings (e.g. `৳ 25,000.00`).
   - Add account number masking helper: `maskAccountNumber(acc: string) => string` (`••••••4821`).
   - Add name abbreviation helper: `abbreviateName(name: string) => string` (`Md. R***`).
   - Add strict 2-decimal amount parser and validator `isValidBankingAmount(val: string): { ok: boolean; amount?: number; error?: string }`.
-- [ ] Update [constants/routes.ts](file:///c:/banking-app/constants/routes.ts):
+- [x] Update [constants/routes.ts](file:///c:/banking-app/constants/routes.ts):
   - Add route for `resetPassword`, `adminBranches`, `adminDeposit`.
   - Remove customer `deposit` route.
 

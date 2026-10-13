@@ -10,6 +10,7 @@ export const ROUTES = {
   splash: '/',
   login: '/(auth)/login',
   register: '/(auth)/register',
+  resetPassword: '/(auth)/reset-password',
 
   // Customer app
   customer: '/(customer)',
@@ -23,11 +24,13 @@ export const ROUTES = {
   sendMoney: '/(customer)/send-money',
   transactionDetails: '/(customer)/transaction-details', // [id] appended at runtime
 
-  // Admin app
+  // Admin / Staff app
   admin: '/(admin)',
   adminDashboard: '/(admin)',
   adminUsers: '/(admin)/users',
   adminAccounts: '/(admin)/accounts',
+  adminBranches: '/(admin)/branches',
+  adminDeposit: '/(admin)/deposit',
   adminTransactions: '/(admin)/transactions',
   adminUserDetails: '/(admin)/user-details', // [id] appended at runtime
 } as const;

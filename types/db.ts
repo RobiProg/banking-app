@@ -1,12 +1,12 @@
 /**
  * Database row types. These mirror the Supabase schema in
- * `supabase/migrations/0001_schema.sql` 1:1.
+ * `supabase/migrations/0007_srs_v2_alignment.sql` 1:1.
  *
  * Keep these as the single source of truth for service return types
  * so screens can stay strongly typed without re-importing generated types.
  */
 
-export type UserRole = 'customer' | 'admin';
+export type UserRole = 'customer' | 'teller' | 'admin';
 
 export type Profile = {
   id: string;
@@ -17,15 +17,28 @@ export type Profile = {
   created_at: string;
 };
 
+export type Branch = {
+  id: string;
+  branch_code: string;
+  name: string;
+  district: string;
+  address: string | null;
+  routing_code: string | null;
+  is_active: boolean;
+  created_at: string;
+};
+
 export type AccountStatus = 'active' | 'inactive' | 'blocked';
 export type AccountType = 'savings';
 
 export type Account = {
   id: string;
   user_id: string;
+  branch_id?: string | null;
+  branch?: Branch | null;
   account_number: string;
   account_type: AccountType;
-  /** Decimal string — Supabase returns NUMERIC as a string. */
+  /** Decimal string — Supabase returns NUMERIC(18,2) as a string. */
   balance: string;
   status: AccountStatus;
   created_at: string;
@@ -36,13 +49,18 @@ export type TransactionStatus = 'completed' | 'failed';
 
 export type Transaction = {
   id: string;
+  reference: string;
   sender_account_id: string | null;
   receiver_account_id: string | null;
-  /** Decimal string — Supabase returns NUMERIC as a string. */
+  /** Decimal string — Supabase returns NUMERIC(18,2) as a string. */
   amount: string;
-  transaction_type: TransactionType;
+  type: TransactionType;
+  transaction_type: TransactionType; // dual-field for backward compatibility
+  branch_id: string | null;
   description: string | null;
   status: TransactionStatus;
+  initiated_by?: string | null;
+  idempotency_key?: string | null;
   created_at: string;
 };
 
@@ -51,8 +69,30 @@ export type Notification = {
   user_id: string;
   title: string;
   message: string;
+  related_transaction_id?: string | null;
   is_read: boolean;
   created_at: string;
+};
+
+export type AuditLog = {
+  id: string;
+  actor_user_id: string | null;
+  action: string;
+  target_type: string | null;
+  target_id: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+};
+
+export type RecipientLookupInfo = {
+  account_number: string;
+  masked_account_number: string;
+  abbreviated_name: string;
+  account_type: AccountType;
+  branch_name: string;
+  district: string;
+  status: AccountStatus;
+  eligible: boolean;
 };
 
 /**
@@ -64,13 +104,17 @@ export type Notification = {
 export type TxnDirection = 'credit' | 'debit' | 'neutral';
 
 export function txnDirection(
-  t: Pick<Transaction, 'transaction_type' | 'sender_account_id' | 'receiver_account_id'>,
+  t: Pick<Transaction, 'sender_account_id' | 'receiver_account_id'> & {
+    type?: TransactionType;
+    transaction_type?: TransactionType;
+  },
   myAccountId: string | null | undefined,
 ): TxnDirection {
   if (!myAccountId) return 'neutral';
-  if (t.transaction_type === 'deposit') return 'credit';
-  if (t.transaction_type === 'withdrawal') return 'debit';
-  if (t.transaction_type === 'transfer') {
+  const effectiveType = t.type ?? t.transaction_type;
+  if (effectiveType === 'deposit') return 'credit';
+  if (effectiveType === 'withdrawal') return 'debit';
+  if (effectiveType === 'transfer') {
     if (t.receiver_account_id === myAccountId) return 'credit';
     if (t.sender_account_id === myAccountId) return 'debit';
   }
