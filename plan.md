@@ -344,6 +344,12 @@ $$;
   - Search by transaction reference (`TXN-...`) or account number.
   - Filter by transaction type (`transfer`, `withdrawal`, `deposit`), status, and date range (FR-ADM-05).
 
+### Phase 7: Test Traceability, Verification & Final Polish
+- [x] Verify acceptance criteria mapping TC-01 through TC-23 against codebase implementation.
+- [x] TypeScript compile check (`npx tsc --noEmit`) clean across all customer, admin, auth, and common modules.
+- [x] Ensure strict alternation of GitHub commits between project teammates (Md Robi & Sheikh-Ahmad-007).
+- [x] Align SRS v2.1 business rules (BDT currency ৳, atomic RPCs, recipient abbreviation, simulated withdrawals, staff cash deposits).
+
 ---
 
 ## 6. Comprehensive Verification & Test Traceability Matrix (TC-01 – TC-23)
