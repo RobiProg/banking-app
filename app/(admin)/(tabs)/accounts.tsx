@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { colors } from '../../../constants/colors';
 import { spacing, typography } from '../../../constants/layout';
 import { LoadingState } from '../../../components/common/LoadingState';
@@ -39,6 +40,7 @@ const STATUS_FILTERS: { key: AccountStatus | 'all'; label: string }[] = [
  * - Tap status action -> modal to specify reason -> logged to audit_logs table.
  */
 export default function AdminAccountsTab() {
+  const router = useRouter();
   const [accounts, setAccounts] = useState<AdminAccountRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -195,6 +197,17 @@ export default function AdminAccountsTab() {
               </View>
               <View style={styles.actions}>
                 <ActionButton
+                  label="Deposit 💵"
+                  highlight
+                  disabled={item.status !== 'active'}
+                  onPress={() => {
+                    router.push({
+                      pathname: '/(admin)/deposit',
+                      params: { account: item.account_number },
+                    });
+                  }}
+                />
+                <ActionButton
                   label="Activate"
                   onPress={() => startStatusChange(item, 'active')}
                   disabled={item.status === 'active'}
@@ -298,11 +311,13 @@ function ActionButton({
   onPress,
   destructive,
   disabled,
+  highlight,
 }: {
   label: string;
   onPress: () => void;
   destructive?: boolean;
   disabled?: boolean;
+  highlight?: boolean;
 }) {
   return (
     <Pressable
@@ -312,6 +327,7 @@ function ActionButton({
       disabled={disabled}
       style={({ pressed }) => [
         styles.action,
+        highlight && styles.actionHighlight,
         destructive && styles.actionDestructive,
         disabled && styles.actionDisabled,
         pressed && styles.pressed,
@@ -320,6 +336,7 @@ function ActionButton({
       <Text
         style={[
           styles.actionLabel,
+          highlight && styles.actionLabelHighlight,
           destructive && styles.actionLabelDestructive,
           disabled && styles.actionLabelDisabled,
         ]}
@@ -379,6 +396,7 @@ const styles = StyleSheet.create({
   rowHeader: {},
   actions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.md,
@@ -394,6 +412,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  actionHighlight: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
   actionDestructive: {
     backgroundColor: colors.errorLight,
     borderColor: colors.error,
@@ -408,6 +430,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.3,
+  },
+  actionLabelHighlight: {
+    color: colors.textOnPrimary,
   },
   actionLabelDestructive: { color: colors.error },
   actionLabelDisabled: { color: colors.textMuted },

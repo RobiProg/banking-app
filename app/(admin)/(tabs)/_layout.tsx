@@ -36,6 +36,13 @@ export default function AdminTabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="deposit"
+        options={{
+          title: 'Cash Deposit',
+          tabBarIcon: ({ color }) => <Glyph color={String(color)}>💵</Glyph>,
+        }}
+      />
+      <Tabs.Screen
         name="accounts"
         options={{
           title: 'Accounts',

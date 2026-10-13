@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { colors } from '../../constants/colors';
 import { spacing, typography } from '../../constants/layout';
 import { ROUTES } from '../../constants/routes';
@@ -21,7 +21,7 @@ import { recordBranchDeposit } from '../../services/admin';
 import type { Branch, RecipientLookupInfo, Transaction } from '../../types/db';
 import { formatBDT, formatDateTime, isValidBankingAmount } from '../../utils/format';
 
-const PRESET_AMOUNTS = [1000, 5000, 10000, 25000, 50000];
+const PRESET_AMOUNTS = [1000, 5000, 10000, 25000, 50000, 100000];
 
 /**
  * Staff Simulated Branch Deposit Screen (SRS v2.1 FR-DEP-01..08, TC-11, TC-12).
@@ -30,6 +30,7 @@ const PRESET_AMOUNTS = [1000, 5000, 10000, 25000, 50000];
  */
 export default function AdminBranchDepositScreen() {
   const router = useRouter();
+  const searchParams = useLocalSearchParams<{ account?: string }>();
 
   // Branch list
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -38,7 +39,7 @@ export default function AdminBranchDepositScreen() {
   const [showBranchPicker, setShowBranchPicker] = useState(false);
 
   // Recipient lookup
-  const [accountNumber, setAccountNumber] = useState('');
+  const [accountNumber, setAccountNumber] = useState(searchParams.account ? searchParams.account.toUpperCase() : '');
   const [lookingUp, setLookingUp] = useState(false);
   const [recipient, setRecipient] = useState<RecipientLookupInfo | null>(null);
   const [lookupError, setLookupError] = useState<string | null>(null);
@@ -52,6 +53,23 @@ export default function AdminBranchDepositScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [receiptTxn, setReceiptTxn] = useState<Transaction | null>(null);
+
+  // Auto-verify if account param is passed from accounts list
+  useEffect(() => {
+    if (searchParams.account && searchParams.account.trim()) {
+      const clean = searchParams.account.trim().toUpperCase();
+      setAccountNumber(clean);
+      setLookingUp(true);
+      lookupRecipient(clean).then((res) => {
+        setLookingUp(false);
+        if (res.errorMessage || !res.info) {
+          setLookupError(res.errorMessage ?? 'Account not found.');
+        } else {
+          setRecipient(res.info);
+        }
+      });
+    }
+  }, [searchParams.account]);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,7 +113,8 @@ export default function AdminBranchDepositScreen() {
   }, [branches, selectedBranchId]);
 
   const parsedAmount = useMemo(() => {
-    return isValidBankingAmount(amountStr);
+    // Cash counter officer can deposit any amount (standard 2 decimal banking validation, no 500k transfer cap)
+    return isValidBankingAmount(amountStr, 1_000_000_000);
   }, [amountStr]);
 
   const canSubmit = useMemo(() => {

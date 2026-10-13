@@ -42,3 +42,7 @@ export function transactionDetailsPath(id: string): string {
 export function adminUserDetailsPath(id: string): string {
   return `/(admin)/user-details?id=${encodeURIComponent(id)}`;
 }
+
+export function adminDepositPath(account?: string): string {
+  return account ? `/(admin)/deposit?account=${encodeURIComponent(account)}` : '/(admin)/deposit';
+}
