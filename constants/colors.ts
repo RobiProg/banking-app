@@ -56,6 +56,13 @@ export const colors = {
   accentTeal: '#0D9488',
   accentEmerald: '#059669',
   accentAmber: '#D97706',
+
+  // Splash Screen & Brand Gradient
+  splashGradient: ['#062A54', '#08488E', '#0A6BD3'] as readonly [string, string, string],
+  splashAccentCyan: '#38BDF8',
+  splashAccentAmber: '#F59E0B',
 } as const;
+
+export const SPLASH_GRADIENT = colors.splashGradient;
 
 export type ColorKey = keyof typeof colors;
