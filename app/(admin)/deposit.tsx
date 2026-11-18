@@ -5,13 +5,17 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Badge } from '../../components/ui/Badge';
+import { Button } from '../../components/ui/Button';
+import { Card } from '../../components/ui/Card';
+import { Icon } from '../../components/ui/Icon';
+import { TextInput } from '../../components/ui/TextInput';
 import { colors } from '../../constants/colors';
-import { spacing, typography } from '../../constants/layout';
+import { radius, shadows, spacing, typography } from '../../constants/layout';
 import { ROUTES } from '../../constants/routes';
 import { ScreenHeader } from '../../components/common/ScreenHeader';
 import { LoadingState } from '../../components/common/LoadingState';
@@ -24,9 +28,8 @@ import { formatBDT, formatDateTime, isValidBankingAmount } from '../../utils/for
 const PRESET_AMOUNTS = [1000, 5000, 10000, 25000, 50000, 100000];
 
 /**
- * Staff Simulated Branch Deposit Screen (SRS v2.1 FR-DEP-01..08, TC-11, TC-12).
- * Allows authorized bank staff (teller/admin) to record a simulated physical
- * cash deposit at the counter into any active customer bank account.
+ * Staff Simulated Branch Deposit Screen (SRS v2.2 FR-DEP-01..08, TC-11, TC-12).
+ * Styled to match SmartBank Figma UI design system.
  */
 export default function AdminBranchDepositScreen() {
   const router = useRouter();
@@ -113,7 +116,6 @@ export default function AdminBranchDepositScreen() {
   }, [branches, selectedBranchId]);
 
   const parsedAmount = useMemo(() => {
-    // Cash counter officer can deposit any amount (standard 2 decimal banking validation, no 500k transfer cap)
     return isValidBankingAmount(amountStr, 1_000_000_000);
   }, [amountStr]);
 
@@ -136,7 +138,6 @@ export default function AdminBranchDepositScreen() {
     setSubmitting(true);
     setSubmitError(null);
 
-    // Client idempotency key
     const idempotencyKey = `dep-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
     const res = await recordBranchDeposit({
@@ -174,75 +175,75 @@ export default function AdminBranchDepositScreen() {
         subtitle="Staff Operator Counter (FR-DEP-01..08)"
       />
 
-      <ScrollView contentContainerStyle={styles.scroll}>
-        {/* Compliance Warning */}
-        <View style={styles.banner}>
-          <Text style={styles.bannerTitle}>💵 Educational Simulation Counter</Text>
-          <Text style={styles.bannerText}>
-            This portal records physical counter deposits into customer accounts. Ensure valid Bangladesh Bank currency banknotes have been physically inspected before posting.
-          </Text>
-        </View>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Compliance Warning Card */}
+        <Card variant="surface" style={styles.bannerCard}>
+          <View style={styles.bannerRow}>
+            <View style={styles.bannerIcon}>
+              <Icon name="bank" size={20} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={styles.bannerTitle}>Educational Simulation Counter</Text>
+              <Text style={styles.bannerText}>
+                Records counter deposits into customer accounts. Ensure valid Bangladesh Bank currency banknotes have been physically verified.
+              </Text>
+            </View>
+          </View>
+        </Card>
 
         {/* Step 1: Target Account */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>1. Target Account Lookup</Text>
           <View style={styles.lookupRow}>
-            <TextInput
-              style={styles.lookupInput}
-              value={accountNumber}
-              onChangeText={(t) => {
-                setAccountNumber(t.toUpperCase());
-                setRecipient(null);
-                setLookupError(null);
-              }}
-              placeholder="e.g. SB-DHK-4821"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="characters"
-              autoCorrect={false}
-              editable={!submitting}
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Verify account"
-              disabled={lookingUp || submitting || !accountNumber.trim()}
+            <View style={{ flex: 1 }}>
+              <TextInput
+                value={accountNumber}
+                onChangeText={(t) => {
+                  setAccountNumber(t.toUpperCase());
+                  setRecipient(null);
+                  setLookupError(null);
+                }}
+                placeholder="e.g. SB-DHK-4821"
+                autoCapitalize="characters"
+                autoCorrect={false}
+                editable={!submitting}
+                containerStyle={{ marginBottom: 0 }}
+                leftIcon="card"
+              />
+            </View>
+            <Button
+              title="Verify"
               onPress={handleVerifyAccount}
-              style={({ pressed }) => [
-                styles.verifyBtn,
-                pressed && styles.pressed,
-                (lookingUp || !accountNumber.trim()) && styles.disabled,
-              ]}
-            >
-              <Text style={styles.verifyBtnText}>
-                {lookingUp ? 'Verifying…' : 'Verify'}
-              </Text>
-            </Pressable>
+              loading={lookingUp}
+              disabled={lookingUp || submitting || !accountNumber.trim()}
+              size="md"
+            />
           </View>
 
           {lookupError ? <Text style={styles.errorText}>{lookupError}</Text> : null}
 
           {recipient ? (
-            <View style={styles.recipientCard}>
+            <Card variant="surface" style={styles.recipientCard}>
               <View style={styles.recipientHead}>
                 <Text style={styles.recipientName}>{recipient.abbreviated_name}</Text>
-                <View style={styles.activePill}>
-                  <Text style={styles.activePillText}>
-                    {recipient.eligible ? 'ACTIVE ACCOUNT' : 'INELIGIBLE'}
-                  </Text>
-                </View>
+                <Badge
+                  label={recipient.eligible ? 'ACTIVE ACCOUNT' : 'INELIGIBLE'}
+                  variant={recipient.eligible ? 'success' : 'error'}
+                />
               </View>
               <Text style={styles.recipientAcc}>
                 Account: {recipient.masked_account_number} ({recipient.account_type.toUpperCase()})
               </Text>
               <Text style={styles.recipientBranch}>
-                📍 Home Branch: {recipient.branch_name} ({recipient.district})
+                Home Branch: {recipient.branch_name} ({recipient.district})
               </Text>
-            </View>
+            </Card>
           ) : null}
         </View>
 
         {/* Step 2: Receiving Branch */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>2. Receiving Branch Location</Text>
+          <Text style={styles.sectionTitle}>2. Operating Branch Location</Text>
           {loadingBranches ? (
             <LoadingState label="Loading branch network…" />
           ) : (
@@ -252,7 +253,7 @@ export default function AdminBranchDepositScreen() {
               onPress={() => setShowBranchPicker(true)}
               style={({ pressed }) => [styles.pickerBtn, pressed && styles.pressed]}
             >
-              <View>
+              <View style={{ gap: 2 }}>
                 <Text style={styles.pickerLabel}>Teller Branch</Text>
                 <Text style={styles.pickerVal}>
                   {selectedBranch
@@ -260,7 +261,7 @@ export default function AdminBranchDepositScreen() {
                     : 'Select branch…'}
                 </Text>
               </View>
-              <Text style={styles.pickerArrow}>▼</Text>
+              <Icon name="chevron-down" size={18} color={colors.textSecondary} />
             </Pressable>
           )}
         </View>
@@ -271,13 +272,12 @@ export default function AdminBranchDepositScreen() {
           <View style={styles.amountInputRow}>
             <Text style={styles.currencyPrefix}>৳</Text>
             <TextInput
-              style={styles.amountInput}
               value={amountStr}
               onChangeText={setAmountStr}
               placeholder="0.00"
-              placeholderTextColor={colors.textMuted}
               keyboardType="decimal-pad"
               editable={!submitting}
+              containerStyle={{ flex: 1, marginBottom: 0 }}
             />
           </View>
 
@@ -299,15 +299,15 @@ export default function AdminBranchDepositScreen() {
             ))}
           </View>
 
-          <Text style={[styles.inputLabel, { marginTop: spacing.md }]}>Reference Note (Optional)</Text>
-          <TextInput
-            style={styles.noteInput}
-            value={note}
-            onChangeText={setNote}
-            placeholder="e.g. Counter cash deposit by customer"
-            placeholderTextColor={colors.textMuted}
-            editable={!submitting}
-          />
+          <View style={{ marginTop: spacing.md }}>
+            <TextInput
+              label="Reference Note (Optional)"
+              value={note}
+              onChangeText={setNote}
+              placeholder="e.g. Counter cash deposit by customer"
+              editable={!submitting}
+            />
+          </View>
         </View>
 
         {/* Step 4: Cash Confirmation */}
@@ -321,11 +321,11 @@ export default function AdminBranchDepositScreen() {
             style={styles.checkboxRow}
           >
             <View style={[styles.checkboxBox, cashConfirmed && styles.checkboxBoxChecked]}>
-              {cashConfirmed ? <Text style={styles.checkMark}>✓</Text> : null}
+              {cashConfirmed && <Icon name="check" size={14} color={colors.textOnPrimary} />}
             </View>
             <Text style={styles.checkboxLabel}>
               I confirm that physical currency banknotes of{' '}
-              <Text style={{ fontWeight: '700', color: colors.text }}>
+              <Text style={{ fontWeight: '700', color: colors.textPrimary }}>
                 {parsedAmount.value ? formatBDT(parsedAmount.value) : 'the stated amount'}
               </Text>{' '}
               have been received, counted, and verified at the branch counter.
@@ -336,21 +336,14 @@ export default function AdminBranchDepositScreen() {
         {submitError ? <Text style={styles.errorBanner}>{submitError}</Text> : null}
 
         {/* Submit Button */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Post branch deposit"
+        <Button
+          title={submitting ? 'Processing Deposit…' : 'Post Branch Deposit'}
+          variant="primary"
+          size="lg"
           disabled={!canSubmit}
+          loading={submitting}
           onPress={handleExecuteDeposit}
-          style={({ pressed }) => [
-            styles.submitBtn,
-            pressed && styles.pressed,
-            !canSubmit && styles.disabled,
-          ]}
-        >
-          <Text style={styles.submitBtnText}>
-            {submitting ? 'Processing Deposit…' : 'Post Branch Deposit'}
-          </Text>
-        </Pressable>
+        />
       </ScrollView>
 
       {/* Branch Selector Modal */}
@@ -370,7 +363,7 @@ export default function AdminBranchDepositScreen() {
                 onPress={() => setShowBranchPicker(false)}
                 style={styles.closeBtn}
               >
-                <Text style={styles.closeText}>✕</Text>
+                <Icon name="close" size={16} color={colors.textSecondary} />
               </Pressable>
             </View>
 
@@ -409,9 +402,9 @@ export default function AdminBranchDepositScreen() {
         onRequestClose={handleResetForm}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.receiptCard}>
+          <View style={styles.receiptModalCard}>
             <View style={styles.receiptSuccessIcon}>
-              <Text style={styles.receiptCheckText}>✓</Text>
+              <Icon name="check" size={32} color={colors.primary} />
             </View>
             <Text style={styles.receiptTitle}>Deposit Successful!</Text>
             <Text style={styles.receiptSubtitle}>
@@ -425,23 +418,26 @@ export default function AdminBranchDepositScreen() {
               </Text>
             </View>
 
-            <View style={styles.receiptMetaWrap}>
+            <Card variant="surface" style={styles.receiptMetaCard}>
               <ReceiptRow label="Transaction Reference" value={receiptTxn?.reference ?? receiptTxn?.id ?? '—'} mono />
+              <View style={styles.receiptDivider} />
               <ReceiptRow label="Target Recipient" value={recipient?.abbreviated_name ?? '—'} />
+              <View style={styles.receiptDivider} />
               <ReceiptRow label="Target Account" value={recipient?.masked_account_number ?? accountNumber} mono />
+              <View style={styles.receiptDivider} />
               <ReceiptRow label="Operating Branch" value={selectedBranch ? `${selectedBranch.name} (${selectedBranch.district})` : '—'} />
+              <View style={styles.receiptDivider} />
               <ReceiptRow label="Date & Time" value={receiptTxn ? formatDateTime(receiptTxn.created_at) : ''} />
+              <View style={styles.receiptDivider} />
               <ReceiptRow label="Status" value="COMPLETED (SETTLED)" />
-            </View>
+            </Card>
 
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Done"
+            <Button
+              title="Done (New Deposit)"
+              variant="primary"
+              size="lg"
               onPress={handleResetForm}
-              style={({ pressed }) => [styles.receiptDoneBtn, pressed && styles.pressed]}
-            >
-              <Text style={styles.receiptDoneText}>Done (New Deposit)</Text>
-            </Pressable>
+            />
           </View>
         </View>
       </Modal>
@@ -452,242 +448,305 @@ export default function AdminBranchDepositScreen() {
 function ReceiptRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <View style={styles.receiptRow}>
-      <Text style={styles.receiptRowLabel}>{label}</Text>
-      <Text style={[styles.receiptRowVal, mono && styles.monoText]}>{value}</Text>
+      <Text style={styles.receiptLabel}>{label}</Text>
+      <Text style={[styles.receiptValue, mono && styles.receiptMono]} numberOfLines={1}>
+        {value}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
-  scroll: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl * 2, gap: spacing.lg },
-  banner: {
-    backgroundColor: colors.primaryLight,
-    padding: spacing.md,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  bannerTitle: { fontSize: 14, fontWeight: '700', color: colors.primaryDark, marginBottom: 2 },
-  bannerText: { fontSize: typography.caption.size, color: colors.textMuted, lineHeight: 18 },
-  section: {
-    backgroundColor: colors.surface,
-    padding: spacing.md,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
-  lookupRow: { flexDirection: 'row', gap: spacing.sm },
-  lookupInput: {
+  safe: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: typography.body.size,
-    color: colors.text,
     backgroundColor: colors.background,
   },
-  verifyBtn: {
-    backgroundColor: colors.primary,
+  scroll: {
     paddingHorizontal: spacing.lg,
-    borderRadius: 8,
+    paddingTop: spacing.base,
+    paddingBottom: spacing.xxl,
+    gap: spacing.lg,
+  },
+  bannerCard: {
+    padding: spacing.base,
+  },
+  bannerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  bannerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.sm,
+    backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  verifyBtnText: { color: colors.textOnPrimary, fontSize: 13, fontWeight: '700' },
-  errorText: { color: colors.error, fontSize: typography.caption.size, marginTop: spacing.xs },
-  recipientCard: {
-    marginTop: spacing.md,
-    backgroundColor: colors.background,
-    padding: spacing.md,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
+  bannerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.primaryDark,
   },
-  recipientHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  recipientName: { fontSize: 16, fontWeight: '700', color: colors.text },
-  activePill: { backgroundColor: colors.successBg, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
-  activePillText: { fontSize: 10, fontWeight: '700', color: colors.success },
-  recipientAcc: { fontSize: typography.body.size, color: colors.textMuted, marginTop: 4 },
-  recipientBranch: { fontSize: typography.caption.size, color: colors.primary, marginTop: 2, fontWeight: '600' },
-  pickerBtn: {
+  bannerText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  section: {
+    gap: spacing.sm,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  lookupRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    alignItems: 'center',
+  },
+  errorText: {
+    color: colors.error,
+    fontSize: typography.caption.size,
+    marginTop: spacing.xs,
+  },
+  recipientCard: {
+    padding: spacing.base,
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  recipientHead: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: colors.background,
+  },
+  recipientName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  recipientAcc: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  recipientBranch: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  pickerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.md,
   },
-  pickerLabel: { fontSize: 11, color: colors.textMuted },
-  pickerVal: { fontSize: 15, fontWeight: '600', color: colors.text, marginTop: 2 },
-  pickerArrow: { fontSize: 12, color: colors.textMuted },
+  pickerLabel: {
+    fontSize: 11,
+    color: colors.textTertiary,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  pickerVal: {
+    fontSize: 15,
+    color: colors.textPrimary,
+    fontWeight: '600',
+    marginTop: 2,
+  },
   amountInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    paddingHorizontal: spacing.md,
+    gap: spacing.sm,
   },
-  currencyPrefix: { fontSize: 24, fontWeight: '700', color: colors.text, marginRight: spacing.xs },
-  amountInput: {
-    flex: 1,
-    fontSize: 24,
+  currencyPrefix: {
+    fontSize: 28,
     fontWeight: '700',
-    color: colors.text,
-    paddingVertical: spacing.sm,
+    color: colors.primary,
   },
-  presetsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs + 2, marginTop: spacing.sm },
+  presetsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
   presetChip: {
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: 6,
-    borderRadius: 6,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  presetChipText: { fontSize: typography.caption.size, fontWeight: '600', color: colors.text },
-  inputLabel: { fontSize: typography.label.size, fontWeight: '600', color: colors.text, marginBottom: 4 },
-  noteInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: typography.body.size,
-    color: colors.text,
-    backgroundColor: colors.background,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  checkboxRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },
+  presetChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    fontVariant: ['tabular-nums'],
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    paddingVertical: spacing.xs,
+  },
   checkboxBox: {
     width: 22,
     height: 22,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: colors.border,
+    borderRadius: radius.xs,
+    borderWidth: 1.5,
+    borderColor: colors.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
   },
-  checkboxBoxChecked: { backgroundColor: colors.primary, borderColor: colors.primary },
-  checkMark: { color: colors.textOnPrimary, fontSize: 14, fontWeight: '800' },
-  checkboxLabel: { flex: 1, fontSize: typography.caption.size, color: colors.textMuted, lineHeight: 18 },
-  errorBanner: {
-    color: colors.error,
-    backgroundColor: colors.errorBg,
-    padding: spacing.md,
-    borderRadius: 8,
-    fontSize: typography.body.size,
-    textAlign: 'center',
-  },
-  submitBtn: {
+  checkboxBoxChecked: {
     backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: colors.primary,
   },
-  submitBtnText: { color: colors.textOnPrimary, fontSize: 16, fontWeight: '700' },
-  pressed: { opacity: 0.8 },
-  disabled: { opacity: 0.5 },
-
+  checkboxLabel: {
+    flex: 1,
+    fontSize: 13,
+    color: colors.textSecondary,
+    lineHeight: 19,
+  },
+  errorBanner: {
+    backgroundColor: colors.errorBg,
+    color: colors.error,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  pressed: {
+    opacity: 0.85,
+  },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(11, 27, 43, 0.45)',
     justifyContent: 'center',
-    alignItems: 'center',
     padding: spacing.lg,
   },
   modalCard: {
-    width: '100%',
     backgroundColor: colors.background,
-    borderRadius: 16,
+    borderRadius: radius.xl,
     padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
+    gap: spacing.md,
+    ...shadows.lg,
   },
   modalHead: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.md,
   },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
-  closeBtn: { padding: spacing.xs },
-  closeText: { fontSize: 18, fontWeight: '700', color: colors.textMuted },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  closeBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   branchItem: {
-    paddingVertical: spacing.sm + 2,
+    paddingVertical: spacing.md,
     paddingHorizontal: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  branchItemActive: { backgroundColor: colors.primaryLight },
-  branchItemName: { fontSize: 15, fontWeight: '700', color: colors.text },
-  branchItemMeta: { fontSize: typography.caption.size, color: colors.textMuted, marginTop: 2 },
-
-  receiptCard: {
-    width: '100%',
+  branchItemActive: {
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.sm,
+  },
+  branchItemName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  branchItemMeta: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  receiptModalCard: {
     backgroundColor: colors.background,
-    borderRadius: 20,
-    padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: radius.xl,
+    padding: spacing.xl,
     alignItems: 'center',
+    gap: spacing.md,
+    ...shadows.lg,
   },
   receiptSuccessIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: colors.successBg,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.sm,
   },
-  receiptCheckText: { color: colors.success, fontSize: 32, fontWeight: '800' },
-  receiptTitle: { fontSize: 20, fontWeight: '800', color: colors.text },
+  receiptTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
   receiptSubtitle: {
-    fontSize: typography.caption.size,
-    color: colors.textMuted,
+    fontSize: 13,
+    color: colors.textSecondary,
     textAlign: 'center',
-    marginTop: 4,
-    marginBottom: spacing.md,
   },
   receiptAmountBox: {
-    backgroundColor: colors.surface,
-    width: '100%',
-    padding: spacing.md,
-    borderRadius: 12,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: spacing.md,
+    paddingVertical: spacing.sm,
   },
-  receiptAmountLabel: { fontSize: typography.caption.size, color: colors.textMuted },
-  receiptAmountVal: { fontSize: 28, fontWeight: '800', color: colors.text, marginTop: 2 },
-  receiptMetaWrap: { width: '100%', marginBottom: spacing.lg },
+  receiptAmountLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  receiptAmountVal: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: colors.primary,
+    fontVariant: ['tabular-nums'],
+    marginTop: 2,
+  },
+  receiptMetaCard: {
+    width: '100%',
+    padding: spacing.base,
+  },
   receiptRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: spacing.xs + 2,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  receiptRowLabel: { fontSize: typography.caption.size, color: colors.textMuted },
-  receiptRowVal: { fontSize: typography.caption.size, fontWeight: '700', color: colors.text },
-  monoText: { fontFamily: 'monospace' },
-  receiptDoneBtn: {
-    backgroundColor: colors.primary,
-    width: '100%',
-    borderRadius: 10,
-    paddingVertical: spacing.sm + 4,
     alignItems: 'center',
+    paddingVertical: spacing.xs,
   },
-  receiptDoneText: { color: colors.textOnPrimary, fontSize: 15, fontWeight: '700' },
+  receiptLabel: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  receiptValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    maxWidth: '60%',
+    textAlign: 'right',
+  },
+  receiptMono: {
+    fontVariant: ['tabular-nums'],
+    letterSpacing: 0.5,
+  },
+  receiptDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: spacing.xs,
+  },
 });

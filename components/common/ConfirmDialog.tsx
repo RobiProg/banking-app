@@ -1,7 +1,7 @@
 import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../../constants/colors';
-import { spacing, typography } from '../../constants/layout';
+import { radius, shadows, spacing, typography } from '../../constants/layout';
 
 type ConfirmDialogProps = {
   visible: boolean;
@@ -101,31 +101,32 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 360,
     backgroundColor: colors.background,
-    borderRadius: 14,
-    padding: spacing.lg,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
     borderWidth: 1,
     borderColor: colors.border,
+    ...shadows.lg,
   },
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.sm,
+    color: colors.textPrimary,
+    marginBottom: spacing.xs,
   },
   message: {
     fontSize: typography.body.size,
-    color: colors.textMuted,
+    color: colors.textSecondary,
     lineHeight: typography.body.size * 1.45,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.xl,
   },
   actions: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.md,
   },
   btn: {
     flex: 1,
-    minHeight: 44,
-    borderRadius: 10,
+    minHeight: 48,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: spacing.sm + 2,

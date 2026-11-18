@@ -6,7 +6,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,7 +15,7 @@ import { spacing, typography } from '../../../constants/layout';
 import { LoadingState } from '../../../components/common/LoadingState';
 import { ErrorState } from '../../../components/common/ErrorState';
 import { EmptyState } from '../../../components/common/EmptyState';
-import { AuthInput } from '../../../components/auth/AuthInput';
+import { TextInput } from '../../../components/ui/TextInput';
 import { AccountRow, StatusPill } from '../../../components/admin/AccountRow';
 import {
   adminSetAccountStatus,
@@ -114,14 +113,14 @@ export default function AdminAccountsTab() {
       </View>
 
       <View style={styles.searchRow}>
-        <AuthInput
-          label=""
+        <TextInput
           value={query}
           onChangeText={(t) => {
             setQuery(t);
             reload(t);
           }}
-          placeholder="Search by account number"
+          placeholder="Search by account number or customer name"
+          leftIcon="search"
           autoCapitalize="characters"
           autoCorrect={false}
           containerStyle={{ marginBottom: 0 }}
@@ -253,13 +252,11 @@ export default function AdminAccountsTab() {
               This action will be logged in the immutable audit log table for bank compliance (FR-ADM-08, TC-15).
             </Text>
 
-            <Text style={styles.inputLabel}>Reason for status update *</Text>
             <TextInput
-              style={styles.reasonInput}
+              label="Reason for status update *"
               value={reason}
               onChangeText={setReason}
-              placeholder="Enter audit reason..."
-              placeholderTextColor={colors.textMuted}
+              placeholder="Enter audit compliance reason..."
               multiline
               numberOfLines={2}
               editable={!updating}

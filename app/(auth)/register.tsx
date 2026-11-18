@@ -1,13 +1,21 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  FlatList,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useRouter } from 'expo-router';
-import { AuthButton } from '../../components/auth/AuthButton';
-import { AuthInput } from '../../components/auth/AuthInput';
 import { FormErrorBanner } from '../../components/auth/FormErrorBanner';
 import { FormSuccessBanner } from '../../components/auth/FormSuccessBanner';
 import { ScreenContainer } from '../../components/auth/ScreenContainer';
+import { Button } from '../../components/ui/Button';
+import { Icon } from '../../components/ui/Icon';
+import { TextInput } from '../../components/ui/TextInput';
 import { colors } from '../../constants/colors';
-import { spacing, typography } from '../../constants/layout';
+import { radius, spacing, typography } from '../../constants/layout';
 import { ROUTES } from '../../constants/routes';
 import { signUp as signUpService } from '../../services/auth';
 import { listActiveBranches } from '../../services/branches';
@@ -30,13 +38,12 @@ type FieldKey = 'fullName' | 'phone' | 'email' | 'password' | 'confirmPassword';
 type FieldErrors = Partial<Record<FieldKey, string>>;
 
 const SUCCESS_REDIRECT_MS = 1200;
-const SUCCESS_MESSAGE = 'Account created. Taking you to the login screen...';
-const PASSWORD_HINT_MESSAGE = 'Use 8 or more characters';
+const SUCCESS_MESSAGE = 'Account created successfully! Redirecting to sign in...';
 
 /**
- * Customer Registration Screen (SRS v2.1 FR-AUTH-01, FR-BR-01, FR-ADM-01, TC-22).
- * Includes home branch selection from active Bangladesh branches.
- * Enforces role restriction (cannot self-assign admin/teller roles).
+ * Mobile Banking Registration Screen. Matches Figma §3.
+ * Includes 4-segment stepper, password strength bar, terms agreement,
+ * and branch association (SRS v2.2 FR-AUTH-01, FR-BR-01).
  */
 export default function RegisterScreen() {
   const router = useRouter();
@@ -45,13 +52,13 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const [agreeTerms, setAgreeTerms] = useState(true);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
 
-  // Branch Selection (FR-BR-01, FR-BR-02)
+  // Branch Selection
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
   const [showBranchModal, setShowBranchModal] = useState(false);
@@ -80,8 +87,18 @@ export default function RegisterScreen() {
     [],
   );
 
+  // Password strength calculation (0 to 4)
+  const passwordStrength = useMemo(() => {
+    if (!password) return 0;
+    let score = 0;
+    if (password.length >= 8) score++;
+    if (/[A-Z]/.test(password)) score++;
+    if (/[0-9]/.test(password)) score++;
+    if (/[^A-Za-z0-9]/.test(password)) score++;
+    return Math.max(1, score);
+  }, [password]);
+
   const passwordCheck = useMemo(() => validatePassword(password), [password]);
-  const showPasswordHint = password.length > 0 && !passwordCheck.ok;
 
   const canSubmit = useMemo(() => {
     return (
@@ -90,9 +107,10 @@ export default function RegisterScreen() {
       isValidEmail(email) &&
       validatePassword(password).ok &&
       passwordsMatch(password, confirmPassword) &&
+      agreeTerms &&
       !loading
     );
-  }, [fullName, phone, email, password, confirmPassword, loading]);
+  }, [fullName, phone, email, password, confirmPassword, agreeTerms, loading]);
 
   function clearOn(key: FieldKey) {
     setFieldErrors((prev) => clearFieldError(prev, key));
@@ -121,7 +139,6 @@ export default function RegisterScreen() {
     setFieldErrors({});
 
     setLoading(true);
-    // Explicitly pass only customer onboarding fields with selected branchId (FR-ADM-01, TC-22)
     const result = await signUpService({
       fullName,
       phone,
@@ -143,199 +160,286 @@ export default function RegisterScreen() {
     }, SUCCESS_REDIRECT_MS);
   }
 
+  const strengthColor = useMemo(() => {
+    switch (passwordStrength) {
+      case 1:
+        return colors.error;
+      case 2:
+        return colors.warning;
+      case 3:
+        return '#EAB308'; // Amber
+      case 4:
+        return colors.success;
+      default:
+        return colors.border;
+    }
+  }, [passwordStrength]);
+
   return (
     <ScreenContainer>
-      <Text style={styles.title}>Create your account</Text>
-      <Text style={styles.subtitle}>
-        Join SmartBank and open your simulated savings account.
-      </Text>
-
-      <AuthInput
-        label="Full Name"
-        value={fullName}
-        onChangeText={(t) => {
-          setFullName(t);
-          clearOn('fullName');
-        }}
-        placeholder="Your full name"
-        autoCapitalize="words"
-        autoCorrect={false}
-        autoComplete="name"
-        textContentType="name"
-        error={fieldErrors.fullName ?? null}
-        editable={!loading}
-      />
-
-      <AuthInput
-        label="Phone"
-        value={phone}
-        onChangeText={(t) => {
-          setPhone(t);
-          clearOn('phone');
-        }}
-        placeholder="e.g. +8801XXXXXXXXX"
-        keyboardType="phone-pad"
-        autoComplete="tel"
-        textContentType="telephoneNumber"
-        error={fieldErrors.phone ?? null}
-        editable={!loading}
-      />
-
-      {/* Home Branch Selection (FR-BR-01, FR-BR-02) */}
-      <View style={styles.branchFieldContainer}>
-        <Text style={styles.branchLabel}>Home Branch</Text>
+      {/* Top Bar with Back Arrow */}
+      <View style={styles.topBar}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Home Branch: ${selectedBranch?.name ?? 'Select branch'}`}
-          onPress={() => setShowBranchModal(true)}
-          style={styles.branchButton}
-          disabled={loading}
+          accessibilityLabel="Back to sign in"
+          onPress={() => router.back()}
+          hitSlop={12}
+          style={styles.backButton}
         >
-          <View style={styles.branchButtonContent}>
-            <Text style={styles.branchButtonTitle} numberOfLines={1}>
-              {selectedBranch?.name ?? 'Loading branches...'}
-            </Text>
-            <Text style={styles.branchButtonSubtitle}>
-              {selectedBranch?.district ? `District: ${selectedBranch.district}` : 'Tap to change branch'}
-            </Text>
-          </View>
-          <Text style={styles.chevron}>▾</Text>
+          <Icon name="chevron-left" size={24} color={colors.textPrimary} />
         </Pressable>
+        <Text style={styles.topBarTitle}>SmartBank</Text>
+        <View style={styles.topBarSpacer} />
       </View>
 
-      <AuthInput
-        label="Email"
-        value={email}
-        onChangeText={(t) => {
-          setEmail(t);
-          clearOn('email');
-        }}
-        placeholder="you@example.com"
-        keyboardType="email-address"
-        autoCapitalize="none"
-        autoCorrect={false}
-        autoComplete="email"
-        textContentType="emailAddress"
-        error={fieldErrors.email ?? null}
-        editable={!loading}
-      />
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.title}>Create your account</Text>
+        <Text style={styles.subtitle}>It takes about 3 minutes to open your savings account.</Text>
+      </View>
 
-      <AuthInput
-        label="Password"
-        value={password}
-        onChangeText={(t) => {
-          setPassword(t);
-          clearOn('password');
-        }}
-        placeholder="At least 8 characters"
-        secureTextEntry={!showPassword}
-        autoCapitalize="none"
-        autoCorrect={false}
-        autoComplete="password-new"
-        textContentType="newPassword"
-        error={fieldErrors.password ?? null}
-        editable={!loading}
-      />
+      {/* Progress Stepper (§3) */}
+      <View style={styles.stepperContainer}>
+        <View style={styles.stepperBars}>
+          <View style={[styles.stepBar, styles.stepBarActive]} />
+          <View style={styles.stepBar} />
+          <View style={styles.stepBar} />
+          <View style={styles.stepBar} />
+        </View>
+        <View style={styles.stepperLabels}>
+          <Text style={[styles.stepLabel, styles.stepLabelActive]}>Details</Text>
+          <Text style={styles.stepLabel}>Verify</Text>
+          <Text style={styles.stepLabel}>Set up</Text>
+          <Text style={styles.stepLabel}>Done</Text>
+        </View>
+      </View>
 
-      {showPasswordHint ? (
-        <Text
-          accessibilityLiveRegion="polite"
-          style={styles.passwordHint}
+      {/* Form Fields */}
+      <View style={styles.form}>
+        <TextInput
+          label="Full name"
+          value={fullName}
+          onChangeText={(t) => {
+            setFullName(t);
+            clearOn('fullName');
+          }}
+          placeholder="e.g. Maria Rossi"
+          autoCapitalize="words"
+          autoCorrect={false}
+          autoComplete="name"
+          textContentType="name"
+          leftIcon="user"
+          error={fieldErrors.fullName ?? null}
+          editable={!loading}
+        />
+
+        <TextInput
+          label="Email address"
+          value={email}
+          onChangeText={(t) => {
+            setEmail(t);
+            clearOn('email');
+          }}
+          placeholder="you@example.com"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="email"
+          textContentType="emailAddress"
+          leftIcon="mail"
+          error={fieldErrors.email ?? null}
+          editable={!loading}
+        />
+
+        <TextInput
+          label="Phone number"
+          value={phone}
+          onChangeText={(t) => {
+            setPhone(t);
+            clearOn('phone');
+          }}
+          placeholder="+8801XXXXXXXXX"
+          keyboardType="phone-pad"
+          autoComplete="tel"
+          textContentType="telephoneNumber"
+          leftIcon="phone"
+          error={fieldErrors.phone ?? null}
+          editable={!loading}
+        />
+
+        {/* Home Branch Card Selector */}
+        <View style={styles.branchField}>
+          <Text style={styles.fieldLabel}>Home branch</Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Home Branch: ${selectedBranch?.name ?? 'Select branch'}`}
+            onPress={() => setShowBranchModal(true)}
+            style={styles.branchSelector}
+            disabled={loading}
+          >
+            <View style={styles.branchLeft}>
+              <View style={styles.branchIconPlate}>
+                <Icon name="bank" size={18} color={colors.primary} />
+              </View>
+              <View style={styles.branchTexts}>
+                <Text style={styles.branchName} numberOfLines={1}>
+                  {selectedBranch?.name ?? 'Loading branches...'}
+                </Text>
+                <Text style={styles.branchDistrict}>
+                  {selectedBranch?.district ? `District: ${selectedBranch.district}` : 'Tap to change branch'}
+                </Text>
+              </View>
+            </View>
+            <Icon name="chevron-down" size={16} color={colors.textSecondary} />
+          </Pressable>
+        </View>
+
+        <TextInput
+          label="Password"
+          value={password}
+          onChangeText={(t) => {
+            setPassword(t);
+            clearOn('password');
+          }}
+          placeholder="Create a strong password"
+          isPassword
+          leftIcon="lock"
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="new-password"
+          textContentType="newPassword"
+          error={fieldErrors.password ?? null}
+          editable={!loading}
+        />
+
+        {/* Password Strength Meter */}
+        {password.length > 0 && (
+          <View style={styles.strengthMeter}>
+            <View style={styles.meterBars}>
+              {[1, 2, 3, 4].map((level) => (
+                <View
+                  key={level}
+                  style={[
+                    styles.meterBar,
+                    {
+                      backgroundColor:
+                        passwordStrength >= level ? strengthColor : colors.border,
+                    },
+                  ]}
+                />
+              ))}
+            </View>
+            <Text style={[styles.strengthText, { color: strengthColor }]}>
+              {passwordStrength === 1 && 'Weak password'}
+              {passwordStrength === 2 && 'Fair password'}
+              {passwordStrength === 3 && 'Good password'}
+              {passwordStrength === 4 && 'Strong password'}
+            </Text>
+          </View>
+        )}
+
+        <TextInput
+          label="Confirm password"
+          value={confirmPassword}
+          onChangeText={(t) => {
+            setConfirmPassword(t);
+            clearOn('confirmPassword');
+          }}
+          placeholder="Re-type your password"
+          isPassword
+          leftIcon="lock"
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="new-password"
+          textContentType="newPassword"
+          error={fieldErrors.confirmPassword ?? null}
+          editable={!loading}
+        />
+
+        {/* Terms of Service Checkbox Row */}
+        <Pressable
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: agreeTerms }}
+          onPress={() => setAgreeTerms((prev) => !prev)}
+          style={styles.termsRow}
         >
-          {PASSWORD_HINT_MESSAGE}
-        </Text>
-      ) : null}
+          <View style={[styles.checkbox, agreeTerms && styles.checkboxActive]}>
+            {agreeTerms && <Icon name="check" size={12} color={colors.textOnPrimary} />}
+          </View>
+          <Text style={styles.termsText}>
+            I agree to the <Text style={styles.termsLink}>Terms of Service</Text> and{' '}
+            <Text style={styles.termsLink}>Privacy Policy</Text>
+          </Text>
+        </Pressable>
 
-      <AuthInput
-        label="Confirm Password"
-        value={confirmPassword}
-        onChangeText={(t) => {
-          setConfirmPassword(t);
-          clearOn('confirmPassword');
-        }}
-        placeholder="Re-enter your password"
-        secureTextEntry={!showPassword}
-        autoCapitalize="none"
-        autoCorrect={false}
-        autoComplete="password-new"
-        textContentType="newPassword"
-        error={fieldErrors.confirmPassword ?? null}
-        editable={!loading}
-      />
+        <FormErrorBanner message={formError} />
+        <FormSuccessBanner message={success ? SUCCESS_MESSAGE : null} />
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={showPassword ? 'Hide passwords' : 'Show passwords'}
-        accessibilityState={{ selected: showPassword }}
-        onPress={() => setShowPassword((s) => !s)}
-        style={styles.toggleRow}
-        disabled={loading}
-      >
-        <Text style={styles.toggleText}>
-          {showPassword ? 'Hide passwords' : 'Show passwords'}
-        </Text>
-      </Pressable>
+        <Button
+          title="Create account"
+          onPress={handleSubmit}
+          loading={loading}
+          disabled={!canSubmit}
+          size="lg"
+          accessibilityHint="Submits your registration and generates your savings account"
+        />
+      </View>
 
-      <FormErrorBanner message={formError} />
-      <FormSuccessBanner message={success ? SUCCESS_MESSAGE : null} />
-
-      <AuthButton
-        title="Create account"
-        onPress={handleSubmit}
-        loading={loading}
-        disabled={!canSubmit}
-        accessibilityHint="Creates your SmartBank account"
-      />
-
-      <Text style={styles.footerText}>
-        Already have an account?{' '}
-        <Text
+      {/* Footer */}
+      <View style={styles.footerRow}>
+        <Text style={styles.footerText}>Already have an account?</Text>
+        <Pressable
           accessibilityRole="link"
-          style={styles.footerLink}
+          accessibilityLabel="Sign in"
           onPress={() => router.replace(ROUTES.login)}
+          hitSlop={8}
         >
-          Login
-        </Text>
-      </Text>
+          <Text style={styles.footerLink}>Sign in</Text>
+        </Pressable>
+      </View>
 
       {/* Branch Selection Modal */}
       <Modal
         visible={showBranchModal}
-        transparent
         animationType="slide"
+        transparent
         onRequestClose={() => setShowBranchModal(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Your Home Branch</Text>
-              <Pressable onPress={() => setShowBranchModal(false)}>
-                <Text style={styles.modalCloseText}>Done</Text>
+              <Text style={styles.modalTitle}>Choose your home branch</Text>
+              <Pressable
+                onPress={() => setShowBranchModal(false)}
+                hitSlop={8}
+                style={styles.modalClose}
+              >
+                <Icon name="close" size={18} color={colors.textSecondary} />
               </Pressable>
             </View>
-
             <FlatList
               data={branches}
               keyExtractor={(item) => item.id}
+              showsVerticalScrollIndicator={false}
               renderItem={({ item }) => {
                 const isSelected = item.id === selectedBranchId;
                 return (
                   <Pressable
-                    style={[styles.branchItem, isSelected && styles.branchItemSelected]}
+                    style={[styles.modalItem, isSelected && styles.modalItemSelected]}
                     onPress={() => {
                       setSelectedBranchId(item.id);
                       setShowBranchModal(false);
                     }}
                   >
-                    <View style={styles.branchItemText}>
-                      <Text style={[styles.branchItemName, isSelected && styles.branchItemTextActive]}>
+                    <View style={styles.modalItemLeft}>
+                      <Text style={[styles.modalItemTitle, isSelected && styles.modalItemTitleSelected]}>
                         {item.name}
                       </Text>
-                      <Text style={styles.branchItemDistrict}>
+                      <Text style={styles.modalItemSub}>
                         {item.district} • Code: {item.branch_code}
                       </Text>
                     </View>
-                    {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                    {isSelected && <Icon name="check" size={16} color={colors.primary} />}
                   </Pressable>
                 );
               }}
@@ -348,145 +452,236 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
-  title: {
-    fontSize: typography.title.size,
-    fontWeight: typography.title.weight,
-    color: colors.text,
-    marginBottom: spacing.xs + 2,
-  },
-  subtitle: {
-    fontSize: typography.subtitle.size,
-    color: colors.textMuted,
-    marginBottom: spacing.lg,
-    lineHeight: typography.subtitle.size * 1.4,
-  },
-  branchFieldContainer: {
-    marginBottom: spacing.md,
-  },
-  branchLabel: {
-    fontSize: typography.label.size,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  branchButton: {
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 4,
+    marginBottom: spacing.base,
+    marginTop: -spacing.xs,
   },
-  branchButtonContent: {
+  backButton: {
+    padding: spacing.xs,
+  },
+  topBarTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  topBarSpacer: {
+    width: 32,
+  },
+  header: {
+    marginBottom: spacing.base,
+  },
+  title: {
+    fontSize: 24, // Figma specification: 24 pt bold
+    fontWeight: '700',
+    color: colors.textPrimary,
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontSize: 15,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+    lineHeight: 22,
+  },
+  stepperContainer: {
+    marginBottom: spacing.xl,
+  },
+  stepperBars: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.xs + 2,
+  },
+  stepBar: {
+    flex: 1,
+    height: 4,
+    borderRadius: radius.pill,
+    backgroundColor: colors.border,
+  },
+  stepBarActive: {
+    backgroundColor: colors.primary,
+  },
+  stepperLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  stepLabel: {
+    fontSize: 12,
+    color: colors.textTertiary,
+  },
+  stepLabelActive: {
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  form: {
+    marginBottom: spacing.xl,
+  },
+  fieldLabel: {
+    fontSize: typography.label.size,
+    fontWeight: typography.label.weight,
+    color: colors.textPrimary,
+    marginBottom: spacing.xs + 2,
+  },
+  branchField: {
+    marginBottom: spacing.base,
+  },
+  branchSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.background,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    height: 56,
+    paddingHorizontal: spacing.base,
+  },
+  branchLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
   },
-  branchButtonTitle: {
-    fontSize: typography.body.size,
-    fontWeight: '600',
-    color: colors.text,
+  branchIconPlate: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.sm,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
   },
-  branchButtonSubtitle: {
+  branchTexts: {
+    flex: 1,
+  },
+  branchName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  branchDistrict: {
     fontSize: 12,
-    color: colors.textMuted,
-    marginTop: 2,
+    color: colors.textSecondary,
+    marginTop: 1,
   },
-  chevron: {
-    fontSize: 18,
-    color: colors.textMuted,
-    marginLeft: spacing.sm,
-  },
-  toggleRow: {
-    alignSelf: 'flex-end',
-    marginBottom: spacing.md,
-  },
-  toggleText: {
-    color: colors.primary,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  passwordHint: {
-    color: colors.textMuted,
-    fontSize: typography.helper.size,
+  strengthMeter: {
     marginTop: -spacing.sm,
-    marginBottom: spacing.md,
+    marginBottom: spacing.base,
+  },
+  meterBars: {
+    flexDirection: 'row',
+    gap: 4,
+    marginBottom: 4,
+  },
+  meterBar: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+  },
+  strengthText: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  termsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+    paddingVertical: spacing.xs,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: radius.xs,
+    borderWidth: 1.5,
+    borderColor: colors.borderStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm + 2,
+  },
+  checkboxActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  termsText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    flex: 1,
+    lineHeight: 18,
+  },
+  termsLink: {
+    color: colors.primary,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
   },
   footerText: {
-    color: colors.textMuted,
-    fontSize: typography.body.size,
-    textAlign: 'center',
-    marginTop: spacing.lg - spacing.xs,
+    fontSize: 14,
+    color: colors.textSecondary,
   },
   footerLink: {
+    fontSize: 14,
+    fontWeight: '600',
     color: colors.primary,
-    fontWeight: '700',
+    marginLeft: spacing.xs + 2,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: 'rgba(11, 27, 43, 0.4)',
     justifyContent: 'flex-end',
   },
   modalContent: {
     backgroundColor: colors.background,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '65%',
-    padding: spacing.md,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: spacing.lg,
+    maxHeight: '75%',
   },
   modalHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingBottom: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    marginBottom: spacing.sm,
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.text,
+    color: colors.textPrimary,
   },
-  modalCloseText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.primary,
+  modalClose: {
+    padding: spacing.xs,
   },
-  branchItem: {
+  modalItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  branchItemSelected: {
+  modalItemSelected: {
     backgroundColor: colors.primaryLight,
-    borderRadius: 8,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.sm,
   },
-  branchItemText: {
+  modalItemLeft: {
     flex: 1,
   },
-  branchItemName: {
+  modalItemTitle: {
     fontSize: 15,
     fontWeight: '600',
-    color: colors.text,
+    color: colors.textPrimary,
   },
-  branchItemTextActive: {
-    color: colors.primaryDark,
-  },
-  branchItemDistrict: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  checkmark: {
-    fontSize: 16,
-    fontWeight: '700',
+  modalItemTitleSelected: {
     color: colors.primary,
-    marginLeft: spacing.sm,
+  },
+  modalItemSub: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
 });

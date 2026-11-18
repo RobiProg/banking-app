@@ -2,19 +2,19 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { TextInput } from '../../../components/ui/TextInput';
 import { colors } from '../../../constants/colors';
 import { spacing, typography } from '../../../constants/layout';
 import { ROUTES, adminUserDetailsPath } from '../../../constants/routes';
 import { LoadingState } from '../../../components/common/LoadingState';
 import { ErrorState } from '../../../components/common/ErrorState';
 import { EmptyState } from '../../../components/common/EmptyState';
-import { AuthInput } from '../../../components/auth/AuthInput';
 import { UserRow } from '../../../components/admin/UserRow';
 import { listUsers, type AdminUserRow } from '../../../services/admin';
 
 /**
- * Admin users tab (Phase 15).
- * Searchable list of users. Tap → user detail (basic info + account).
+ * Admin Users Tab.
+ * User directory with search input matching Figma design tokens.
  */
 export default function AdminUsersTab() {
   const router = useRouter();
@@ -40,21 +40,21 @@ export default function AdminUsersTab() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Users</Text>
+        <Text style={styles.title}>Users Directory</Text>
         <Text style={styles.subtitle}>
-          {loading ? 'Loading…' : `${users.length} ${users.length === 1 ? 'user' : 'users'}`}
+          {loading ? 'Searching…' : `${users.length} ${users.length === 1 ? 'user' : 'users'} registered`}
         </Text>
       </View>
 
       <View style={styles.searchRow}>
-        <AuthInput
-          label=""
+        <TextInput
           value={query}
           onChangeText={(t) => {
             setQuery(t);
             reload(t);
           }}
           placeholder="Search by name, email or phone"
+          leftIcon="search"
           autoCapitalize="none"
           autoCorrect={false}
           containerStyle={{ marginBottom: 0 }}
@@ -106,18 +106,35 @@ export default function AdminUsersTab() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
-  body: { flex: 1, paddingHorizontal: spacing.lg, justifyContent: 'center' },
+  safe: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  body: {
+    flex: 1,
+    paddingHorizontal: spacing.lg,
+    justifyContent: 'center',
+  },
   headerRow: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
+    paddingTop: spacing.base,
     paddingBottom: spacing.sm,
   },
-  title: { fontSize: 24, fontWeight: '700', color: colors.text },
-  subtitle: { fontSize: typography.helper.size, color: colors.textMuted, marginTop: 2 },
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  subtitle: {
+    fontSize: typography.caption.size,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
   searchRow: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.md,
   },
-  list: { paddingBottom: spacing.xl },
+  list: {
+    paddingBottom: spacing.xl,
+  },
 });

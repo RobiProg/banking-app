@@ -1,28 +1,24 @@
 import React, { useEffect, useRef } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
-import * as ExpoSplashScreen from 'expo-splash-screen';
+import { SplashScreen as RouterSplashScreen, useRouter } from 'expo-router';
 import { ScreenContainer } from '../components/auth/ScreenContainer';
+import { Icon } from '../components/ui/Icon';
 import { colors } from '../constants/colors';
-import { spacing, typography } from '../constants/layout';
+import { radius, spacing, typography } from '../constants/layout';
 import { ROUTES } from '../constants/routes';
 import { getSessionWithProfile } from '../services/auth';
 
-const MIN_VISIBLE_MS = 2000;
+const MIN_VISIBLE_MS = 1800;
 const APP_VERSION = '1.0.0';
 
-ExpoSplashScreen.preventAutoHideAsync().catch(() => {
-  // ignore — older Expo Go builds ignore this call.
+RouterSplashScreen.preventAutoHideAsync().catch(() => {
+  // ignore
 });
 
 /**
- * Splash / route-by-role screen.
- *   1. Wait at least MIN_VISIBLE_MS.
- *   2. Check the session.
- *   3. If signed in, load the profile and route by role.
- *      - admins → /(admin)
- *      - customers → /(customer)
- *   4. If signed out → /(auth)/login.
+ * Splash / route-by-role screen. Matches Figma §1.
+ * Centered logo lockup with shield icon + "SmartBank" wordmark,
+ * indeterminate loader, and automatic route redirection.
  */
 export default function SplashScreen() {
   const router = useRouter();
@@ -40,18 +36,11 @@ export default function SplashScreen() {
       timeoutRef.current = setTimeout(async () => {
         if (cancelled) return;
         try {
-          await ExpoSplashScreen.hideAsync();
+          await RouterSplashScreen.hideAsync();
         } catch {
-          // ignore — splash module may not be available in Expo Go sandbox.
+          // ignore
         }
-        if (!lookup.user) {
-          router.replace(ROUTES.login);
-          return;
-        }
-        if (!lookup.profile) {
-          // Profile row missing or query failed — send to login so they
-          // can try again. The error message will appear in the next
-          // screen via the (customer)/_layout.tsx gate.
+        if (!lookup.user || !lookup.profile) {
           router.replace(ROUTES.login);
           return;
         }
@@ -78,71 +67,79 @@ export default function SplashScreen() {
     <ScreenContainer scrollable={false} centered>
       <View style={styles.fill}>
         <View style={styles.center}>
-          <View style={styles.card} accessible accessibilityRole="image">
-            <View style={styles.logoPlate}>
-              <Text style={styles.logoMarkText}>SB</Text>
+          {/* Logo Lockup: 32x32 shield icon + SmartBank Wordmark */}
+          <View style={styles.logoLockup} accessible accessibilityRole="image">
+            <View style={styles.shieldPlate}>
+              <Icon name="shield" size={24} color={colors.primary} />
+            </View>
+            <Text style={styles.wordmark}>SmartBank</Text>
+          </View>
+          <Text style={styles.tagline}>Modern digital banking</Text>
+
+          {/* Indeterminate linear loading indicator */}
+          <View style={styles.loaderWrap}>
+            <View style={styles.linearTrack}>
+              <ActivityIndicator size="small" color={colors.primary} />
             </View>
           </View>
-          <Text style={styles.appName}>SmartBank</Text>
-          <Text style={styles.tagline}>Secure digital banking</Text>
-          <View style={styles.loaderWrap}>
-            <ActivityIndicator color={colors.primary} />
-          </View>
         </View>
-        <Text style={styles.versionTag}>v{APP_VERSION}</Text>
+
+        <Text style={styles.versionTag}>v{APP_VERSION} • Educational Banking Simulation</Text>
       </View>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  fill: { flex: 1, justifyContent: 'space-between' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  card: {
+  fill: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  center: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.lg,
   },
-  logoPlate: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: colors.primary,
+  logoLockup: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.primaryDark,
-    shadowOpacity: 0.25,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 12,
-    elevation: 6,
+    marginBottom: spacing.xs,
   },
-  logoMarkText: {
-    color: colors.textOnPrimary,
-    fontSize: 36,
-    fontWeight: '800',
-    letterSpacing: 1,
+  shieldPlate: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
   },
-  appName: {
-    fontSize: typography.title.size + 4,
-    fontWeight: typography.title.weight,
-    color: colors.text,
-    marginBottom: spacing.xs + 2,
-    letterSpacing: 0.3,
+  wordmark: {
+    fontSize: 28, // Figma specification: Inter 700, 28pt
+    fontWeight: '700',
+    color: colors.textPrimary,
+    letterSpacing: -0.5,
   },
   tagline: {
     fontSize: typography.subtitle.size,
-    color: colors.textMuted,
-    opacity: 0.85,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
   },
   loaderWrap: {
-    marginTop: spacing.xl + spacing.xs,
-    marginBottom: spacing.lg,
+    marginTop: spacing.xxl,
+    alignItems: 'center',
+  },
+  linearTrack: {
+    width: 48,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   versionTag: {
-    color: colors.textMuted,
+    color: colors.textTertiary,
     fontSize: typography.helper.size,
-    opacity: 0.7,
     textAlign: 'center',
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.base,
   },
 });

@@ -1,12 +1,13 @@
 import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { AuthButton } from '../../components/auth/AuthButton';
-import { AuthInput } from '../../components/auth/AuthInput';
 import { FormErrorBanner } from '../../components/auth/FormErrorBanner';
 import { ScreenContainer } from '../../components/auth/ScreenContainer';
+import { Button } from '../../components/ui/Button';
+import { Icon } from '../../components/ui/Icon';
+import { TextInput } from '../../components/ui/TextInput';
 import { colors } from '../../constants/colors';
-import { spacing, typography } from '../../constants/layout';
+import { radius, spacing, typography } from '../../constants/layout';
 import { ROUTES } from '../../constants/routes';
 import { getSessionWithProfile, signIn } from '../../services/auth';
 import {
@@ -19,11 +20,13 @@ import {
 type FieldKey = 'email' | 'password';
 type FieldErrors = Partial<Record<FieldKey, string>>;
 
+/**
+ * Mobile Banking Login Screen. Matches Figma §2.
+ */
 export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -72,131 +75,204 @@ export default function LoginScreen() {
     }
   }
 
+  function handleBiometrics() {
+    Alert.alert(
+      'Biometric Sign In',
+      'Quick login with Face ID / Touch ID will authenticate using your saved credentials.',
+      [{ text: 'OK' }]
+    );
+  }
+
   return (
     <ScreenContainer>
-      <Text style={styles.title}>Welcome back</Text>
-      <Text style={styles.subtitle}>
-        Sign in to access your SmartBank account.
-      </Text>
-
-      <AuthInput
-        label="Email"
-        value={email}
-        onChangeText={(t) => {
-          setEmail(t);
-          clearOn('email');
-        }}
-        placeholder="you@example.com"
-        keyboardType="email-address"
-        autoCapitalize="none"
-        autoCorrect={false}
-        autoComplete="email"
-        textContentType="emailAddress"
-        error={fieldErrors.email ?? null}
-        editable={!loading}
-      />
-
-      <AuthInput
-        label="Password"
-        value={password}
-        onChangeText={(t) => {
-          setPassword(t);
-          clearOn('password');
-        }}
-        placeholder="Enter your password"
-        secureTextEntry={!showPassword}
-        autoCapitalize="none"
-        autoCorrect={false}
-        autoComplete="password"
-        textContentType="password"
-        error={fieldErrors.password ?? null}
-        editable={!loading}
-      />
-
-      <View style={styles.passwordMetaRow}>
-        <Pressable
-          accessibilityRole="link"
-          accessibilityLabel="Forgot password?"
-          onPress={() => router.push(ROUTES.resetPassword)}
-          disabled={loading}
-        >
-          <Text style={styles.forgotLink}>Forgot password?</Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
-          accessibilityState={{ selected: showPassword }}
-          onPress={() => setShowPassword((s) => !s)}
-          disabled={loading}
-        >
-          <Text style={styles.toggleText}>
-            {showPassword ? 'Hide password' : 'Show password'}
-          </Text>
-        </Pressable>
+      {/* Brand Badge */}
+      <View style={styles.topLogoRow}>
+        <View style={styles.miniLogo}>
+          <Icon name="shield" size={18} color={colors.primary} />
+        </View>
+        <Text style={styles.logoLabel}>SmartBank</Text>
       </View>
 
-      <FormErrorBanner message={formError} />
+      {/* Top Section */}
+      <View style={styles.header}>
+        <Text style={styles.title}>Welcome back</Text>
+        <Text style={styles.subtitle}>Sign in to access your SmartBank account.</Text>
+      </View>
 
-      <AuthButton
-        title="Login"
-        onPress={handleSubmit}
-        loading={loading}
-        disabled={!canSubmit}
-        accessibilityHint="Signs you in and opens your accounts"
-      />
+      {/* Form Fields */}
+      <View style={styles.form}>
+        <TextInput
+          label="Email address"
+          value={email}
+          onChangeText={(t) => {
+            setEmail(t);
+            clearOn('email');
+          }}
+          placeholder="you@example.com"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="email"
+          textContentType="emailAddress"
+          leftIcon="mail"
+          error={fieldErrors.email ?? null}
+          editable={!loading}
+        />
 
-      <Text style={styles.footerText}>
-        Don&apos;t have an account?{' '}
-        <Text
+        <TextInput
+          label="Password"
+          value={password}
+          onChangeText={(t) => {
+            setPassword(t);
+            clearOn('password');
+          }}
+          placeholder="Enter your password"
+          isPassword
+          leftIcon="lock"
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="password"
+          textContentType="password"
+          error={fieldErrors.password ?? null}
+          editable={!loading}
+        />
+
+        <View style={styles.forgotRow}>
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel="Forgot password?"
+            onPress={() => router.push(ROUTES.resetPassword)}
+            disabled={loading}
+            hitSlop={8}
+          >
+            <Text style={styles.forgotLink}>Forgot password?</Text>
+          </Pressable>
+        </View>
+
+        <FormErrorBanner message={formError} />
+
+        <Button
+          title="Sign in"
+          onPress={handleSubmit}
+          loading={loading}
+          disabled={!canSubmit}
+          size="lg"
+          accessibilityHint="Signs you in and opens your accounts"
+        />
+
+        {/* Divider with center "or" */}
+        <View style={styles.dividerRow}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>or</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        {/* Biometrics Secondary Action */}
+        <Button
+          title="Continue with biometrics"
+          variant="outline"
+          icon="biometrics"
+          onPress={handleBiometrics}
+          disabled={loading}
+          accessibilityHint="Sign in using Face ID or Touch ID"
+        />
+      </View>
+
+      {/* Bottom Footer Link */}
+      <View style={styles.footerRow}>
+        <Text style={styles.footerText}>New to SmartBank?</Text>
+        <Pressable
           accessibilityRole="link"
-          style={styles.footerLink}
+          accessibilityLabel="Create account"
           onPress={() => router.push(ROUTES.register)}
+          hitSlop={8}
         >
-          Create account
-        </Text>
-      </Text>
+          <Text style={styles.footerLink}>Create account</Text>
+        </Pressable>
+      </View>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
+  topLogoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  miniLogo: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.sm,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+  },
+  logoLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: -0.3,
+  },
+  header: {
+    marginBottom: spacing.xl,
+  },
   title: {
-    fontSize: typography.title.size,
-    fontWeight: typography.title.weight,
-    color: colors.text,
-    marginBottom: spacing.xs + 2, // 6
+    fontSize: 24, // Figma specification: 24 pt bold
+    fontWeight: '700',
+    color: colors.textPrimary,
+    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: typography.subtitle.size,
-    color: colors.textMuted,
-    marginBottom: spacing.lg + spacing.xs, // 28
-    lineHeight: typography.subtitle.size * 1.4,
+    fontSize: 15, // Figma specification: 15 pt regular
+    color: colors.textSecondary,
+    marginTop: spacing.sm,
+    lineHeight: 22,
   },
-  passwordMetaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
+  form: {
+    marginBottom: spacing.xxl,
+  },
+  forgotRow: {
+    alignItems: 'flex-end',
+    marginBottom: spacing.lg,
+    marginTop: -spacing.xs,
   },
   forgotLink: {
-    color: colors.primary,
     fontSize: 13,
     fontWeight: '600',
+    color: colors.primary,
   },
-  toggleText: {
-    color: colors.textMuted,
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: spacing.xl,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  dividerText: {
+    paddingHorizontal: spacing.base,
     fontSize: 13,
-    fontWeight: '500',
+    color: colors.textSecondary,
+    textTransform: 'lowercase',
+  },
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
   },
   footerText: {
-    color: colors.textMuted,
-    fontSize: typography.body.size,
-    textAlign: 'center',
-    marginTop: spacing.lg - spacing.xs, // 20
+    fontSize: 14,
+    color: colors.textSecondary,
   },
   footerLink: {
+    fontSize: 14,
+    fontWeight: '600',
     color: colors.primary,
-    fontWeight: '700',
+    marginLeft: spacing.xs + 2,
   },
 });

@@ -1,19 +1,21 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { Badge } from '../../components/ui/Badge';
+import { Button } from '../../components/ui/Button';
+import { Card } from '../../components/ui/Card';
+import { Icon } from '../../components/ui/Icon';
+import { TextInput } from '../../components/ui/TextInput';
 import { ScreenContainer } from '../../components/auth/ScreenContainer';
 import { ScreenHeader } from '../../components/common/ScreenHeader';
-import { AuthInput } from '../../components/auth/AuthInput';
-import { AuthButton } from '../../components/auth/AuthButton';
 import { FormErrorBanner } from '../../components/auth/FormErrorBanner';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { LoadingState } from '../../components/common/LoadingState';
 import { ErrorState } from '../../components/common/ErrorState';
-import { Card } from '../../components/common/Card';
 import { Money } from '../../components/common/Money';
 import { colors } from '../../constants/colors';
-import { spacing, typography } from '../../constants/layout';
+import { radius, spacing } from '../../constants/layout';
 import { ROUTES } from '../../constants/routes';
 import { useAccount } from '../../hooks/useAccount';
 import { lookupRecipient } from '../../services/accounts';
@@ -21,15 +23,12 @@ import { appTransfer, generateIdempotencyKey } from '../../services/transactions
 import { formatBDT, isValidBankingAmount } from '../../utils/format';
 import { parseAmount, type RecipientLookupInfo, type Transaction } from '../../types/db';
 
-type Step = 1 | 2 | 3;
+type Step = 1 | 2;
 
 /**
- * Send Money Screen (SRS v2.1 FR-TRF-01..13, design.md §5.1 / §6.4).
- * Multi-step flow:
- *   1. Recipient account number -> Lookup returns abbreviated name, masked account, branch.
- *   2. Amount (strict 2 decimal places, max limit, remaining balance) + optional note.
- *   3. Confirmation sheet with zero transfer fee notice and UUID idempotency key.
- *   4. Success receipt modal with unique reference.
+ * Send / Transfer Money Flow. Matches Figma §12 & §13.
+ * 3-step visual stepper: Recipient -> Amount -> Review -> Success Receipt.
+ * Preserves Supabase atomic RPC transfer and idempotency.
  */
 export default function SendMoneyScreen() {
   const router = useRouter();
@@ -93,7 +92,7 @@ export default function SendMoneyScreen() {
     }
 
     if (trimmed === account?.account_number) {
-      setRecipientError("You cannot transfer to your own account (FR-TRF-09).");
+      setRecipientError('You cannot transfer to your own account (FR-TRF-09).');
       return;
     }
 
@@ -132,7 +131,6 @@ export default function SendMoneyScreen() {
 
   function handleOpenConfirm() {
     if (!amountValidation.ok || isOverBalance) return;
-    // Generate UUID idempotency key once upon opening confirmation sheet (design.md §6.4)
     setIdempotencyKey(generateIdempotencyKey());
     setShowConfirm(true);
   }
@@ -162,57 +160,80 @@ export default function SendMoneyScreen() {
     setCompletedTxn(res.transaction);
   }
 
-  // --- Success Modal / Screen ---
+  // --- Success Modal / Screen (§13) ---
   if (completedTxn) {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <ScreenHeader title="Transfer Receipt" />
-        <ScrollView contentContainerStyle={styles.receiptScroll}>
-          <View style={styles.receiptCard}>
-            <View style={styles.successIconPlate}>
-              <Text style={styles.successIcon}>✓</Text>
+        <ScrollView contentContainerStyle={styles.receiptScroll} showsVerticalScrollIndicator={false}>
+          {/* Success Hero (§13) */}
+          <View style={styles.successHero}>
+            <View style={styles.successCircle}>
+              <Icon name="check" size={36} color={colors.primary} />
             </View>
-            <Text style={styles.receiptTitle}>Transfer Successful</Text>
-            <Money value={completedTxn.amount} size="xl" color={colors.success} />
+            <Text style={styles.successTitle}>Transfer complete</Text>
+            <Text style={styles.successAmount}>{formatBDT(completedTxn.amount)}</Text>
+            <Text style={styles.successRecipient}>
+              to {recipientInfo?.abbreviated_name}
+            </Text>
+          </View>
 
-            <View style={styles.receiptDetails}>
-              <View style={styles.receiptRow}>
-                <Text style={styles.receiptLabel}>Reference</Text>
-                <Text style={styles.receiptValue}>{completedTxn.reference}</Text>
-              </View>
-              <View style={styles.receiptRow}>
-                <Text style={styles.receiptLabel}>Recipient</Text>
-                <Text style={styles.receiptValue}>{recipientInfo?.abbreviated_name}</Text>
-              </View>
-              <View style={styles.receiptRow}>
-                <Text style={styles.receiptLabel}>Account</Text>
-                <Text style={styles.receiptValue}>{recipientInfo?.masked_account_number}</Text>
-              </View>
-              <View style={styles.receiptRow}>
-                <Text style={styles.receiptLabel}>Recipient Branch</Text>
-                <Text style={styles.receiptValue}>{recipientInfo?.branch_name}</Text>
-              </View>
-              <View style={styles.receiptRow}>
-                <Text style={styles.receiptLabel}>Transfer Fee</Text>
-                <Text style={styles.receiptValue}>৳0.00 (Zero Fee)</Text>
-              </View>
-              {completedTxn.description && (
+          {/* Receipt Breakdown Card */}
+          <Card variant="surface" style={styles.receiptCard}>
+            <View style={styles.receiptRow}>
+              <Text style={styles.receiptLabel}>Reference ID</Text>
+              <Text style={styles.receiptValue}>{completedTxn.reference}</Text>
+            </View>
+            <View style={styles.rowDivider} />
+            <View style={styles.receiptRow}>
+              <Text style={styles.receiptLabel}>Recipient account</Text>
+              <Text style={styles.receiptValue}>{recipientInfo?.masked_account_number}</Text>
+            </View>
+            <View style={styles.rowDivider} />
+            <View style={styles.receiptRow}>
+              <Text style={styles.receiptLabel}>Recipient branch</Text>
+              <Text style={styles.receiptValue}>{recipientInfo?.branch_name}</Text>
+            </View>
+            <View style={styles.rowDivider} />
+            <View style={styles.receiptRow}>
+              <Text style={styles.receiptLabel}>Transfer fee</Text>
+              <Text style={styles.receiptValueFree}>৳0.00 (Zero Fee)</Text>
+            </View>
+            {completedTxn.description && (
+              <>
+                <View style={styles.rowDivider} />
                 <View style={styles.receiptRow}>
                   <Text style={styles.receiptLabel}>Note</Text>
                   <Text style={styles.receiptValue}>{completedTxn.description}</Text>
                 </View>
-              )}
-            </View>
+              </>
+            )}
+          </Card>
 
-            <View style={styles.educationalBadge}>
-              <Text style={styles.educationalText}>Educational Simulation • No real funds moved</Text>
-            </View>
+          <View style={styles.simulatedNote}>
+            <Icon name="info" size={14} color={colors.textSecondary} />
+            <Text style={styles.simulatedText}>
+              Educational Simulation • Atomic ledger transaction verified
+            </Text>
           </View>
 
-          <AuthButton
-            title="Done"
-            onPress={() => router.replace(ROUTES.customer)}
-          />
+          {/* Bottom Actions (§13) */}
+          <View style={styles.receiptActions}>
+            <Button
+              title="Share receipt"
+              variant="outline"
+              icon="copy"
+              onPress={() =>
+                Alert.alert('Share Receipt', `Reference: ${completedTxn.reference}\nAmount: ${formatBDT(completedTxn.amount)}`, [{ text: 'OK' }])
+              }
+              style={styles.actionButton}
+            />
+            <Button
+              title="Done"
+              variant="primary"
+              onPress={() => router.replace(ROUTES.customer)}
+              style={styles.actionButton}
+            />
+          </View>
         </ScrollView>
       </SafeAreaView>
     );
@@ -222,18 +243,18 @@ export default function SendMoneyScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader
         title="Send money"
-        subtitle={`Step ${step} of 2 • SmartBank Internal Transfer`}
+        subtitle={`Step ${step} of 2 • SmartBank P2P Transfer`}
       />
 
-      <ScrollView contentContainerStyle={styles.scroll}>
-        {/* Source Account Info */}
-        <Card style={styles.sourceCard}>
-          <Text style={styles.sourceLabel}>From Account</Text>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Source Account Info Card */}
+        <Card variant="surface" style={styles.sourceCard}>
+          <Text style={styles.sourceLabel}>From account</Text>
           <View style={styles.sourceRow}>
             <View>
               <Text style={styles.sourceNumber}>{account.account_number}</Text>
               <Text style={styles.sourceBranch}>
-                {account.branch ? `${account.branch.name} (${account.branch.district})` : 'Dhaka Motijheel Main'}
+                {account.branch ? `${account.branch.name} (${account.branch.district})` : 'Assigned branch'}
               </Text>
             </View>
             <View style={styles.balanceRight}>
@@ -248,118 +269,127 @@ export default function SendMoneyScreen() {
         {/* STEP 1: Recipient Input */}
         {step === 1 && (
           <View style={styles.stepContainer}>
-            <Text style={styles.stepTitle}>Enter Recipient Account</Text>
-            <Text style={styles.stepSubtitle}>
-              SmartBank will look up the branch and verify the recipient automatically.
-            </Text>
+            <View style={styles.stepHeader}>
+              <Text style={styles.stepTitle}>Choose recipient</Text>
+              <Text style={styles.stepSubtitle}>
+                Enter the 10-digit SmartBank account number to send funds instantly.
+              </Text>
+            </View>
 
-            <AuthInput
-              label="Recipient Account Number"
-              placeholder="e.g. AC1000000002"
+            <TextInput
+              label="Recipient account number"
+              placeholder="e.g. 1000000002"
               value={recipientNumber}
               onChangeText={(t) => {
                 setRecipientNumber(t);
                 setRecipientError(null);
               }}
-              autoCapitalize="characters"
-              autoCorrect={false}
+              leftIcon="user"
+              keyboardType="number-pad"
+              maxLength={12}
               error={recipientError}
-              editable={!recipientChecking}
+              autoFocus
             />
 
-            <AuthButton
-              title="Verify Recipient"
+            <Button
+              title="Verify recipient"
               onPress={handleValidateRecipient}
               loading={recipientChecking}
               disabled={!recipientNumber.trim()}
+              size="lg"
             />
           </View>
         )}
 
-        {/* STEP 2: Amount & Details */}
+        {/* STEP 2: Amount & Note Input */}
         {step === 2 && recipientInfo && (
           <View style={styles.stepContainer}>
-            {/* Verified Recipient Preview Card (FR-TRF-02, TC-21) */}
-            <Card style={styles.recipientCard}>
-              <View style={styles.recipientHeader}>
-                <View style={styles.verifiedIconPlate}>
-                  <Text style={styles.verifiedIcon}>✓</Text>
-                </View>
-                <View style={styles.recipientMeta}>
-                  <Text style={styles.recipientName}>{recipientInfo.abbreviated_name}</Text>
-                  <Text style={styles.recipientNumber}>{recipientInfo.masked_account_number}</Text>
+            {/* Selected Recipient Card Chip (§12) */}
+            <Card variant="default" style={styles.recipientChip}>
+              <View style={styles.chipRow}>
+                <View style={styles.chipLeft}>
+                  <View style={styles.verifiedIconPlate}>
+                    <Icon name="check" size={16} color={colors.success} />
+                  </View>
+                  <View style={styles.recipientTexts}>
+                    <Text style={styles.recipientName}>{recipientInfo.abbreviated_name}</Text>
+                    <Text style={styles.recipientMeta}>
+                      {recipientInfo.masked_account_number} • {recipientInfo.branch_name}
+                    </Text>
+                  </View>
                 </View>
                 <Pressable
                   accessibilityRole="button"
+                  accessibilityLabel="Change recipient"
                   onPress={() => {
                     setStep(1);
                     setRecipientInfo(null);
                   }}
+                  hitSlop={8}
                   style={styles.changeBtn}
                 >
                   <Text style={styles.changeBtnText}>Change</Text>
                 </Pressable>
               </View>
-
-              <View style={styles.branchRow}>
-                <Text style={styles.branchLabel}>Branch:</Text>
-                <Text style={styles.branchValue}>
-                  {recipientInfo.branch_name} ({recipientInfo.district})
-                </Text>
-              </View>
             </Card>
 
-            <View style={styles.inputGap}>
-              <AuthInput
-                label="Amount (৳)"
-                placeholder="0.00"
-                value={amount}
-                onChangeText={setAmount}
-                keyboardType="decimal-pad"
-                error={
-                  !amountValidation.ok && amount.length > 0
-                    ? amountValidation.message
-                    : isOverBalance
-                    ? 'Amount exceeds available balance'
-                    : null
-                }
-              />
-            </View>
+            {/* Amount Input */}
+            <TextInput
+              label="Transfer amount (৳)"
+              placeholder="0.00"
+              value={amount}
+              onChangeText={setAmount}
+              keyboardType="decimal-pad"
+              leftIcon="bank"
+              error={
+                !amountValidation.ok && amount.length > 0
+                  ? amountValidation.message
+                  : isOverBalance
+                  ? 'Amount exceeds available balance'
+                  : null
+              }
+              autoFocus
+            />
 
+            {/* Balance Preview */}
             {amountValidation.ok && !isOverBalance && (
-              <View style={styles.remainingBox}>
-                <Text style={styles.remainingText}>
-                  Remaining Balance: <Text style={styles.remainingBold}>{formatBDT(remainingBalance)}</Text>
-                </Text>
-                <Text style={styles.feeNotice}>Transfer Fee: ৳0.00 (Zero Fee)</Text>
+              <View style={styles.previewBox}>
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>Remaining balance:</Text>
+                  <Text style={styles.previewValue}>{formatBDT(remainingBalance)}</Text>
+                </View>
+                <View style={styles.previewRow}>
+                  <Text style={styles.previewLabel}>Transfer fee:</Text>
+                  <Text style={styles.freeText}>৳0.00 (Zero Fee)</Text>
+                </View>
               </View>
             )}
 
-            <View style={styles.inputGap}>
-              <AuthInput
-                label="Note / Reference (Optional)"
-                placeholder="e.g. Dinner share, Project payment"
-                value={note}
-                onChangeText={setNote}
-                maxLength={60}
-              />
-            </View>
+            <TextInput
+              label="Note / Reference (Optional)"
+              placeholder="What's this for?"
+              value={note}
+              onChangeText={setNote}
+              maxLength={60}
+              leftIcon="mail"
+            />
 
-            <AuthButton
-              title="Review Transfer"
+            <Button
+              title="Review transfer"
               onPress={handleOpenConfirm}
               disabled={!amountValidation.ok || isOverBalance}
+              size="lg"
             />
           </View>
         )}
       </ScrollView>
 
-      {/* Confirmation Dialog (FR-TRF-04) */}
+      {/* Confirmation Dialog */}
       <ConfirmDialog
         visible={showConfirm}
-        title="Confirm Transfer"
+        title="Confirm transfer"
         message={`Are you sure you want to send ${formatBDT(amountNum)} to ${recipientInfo?.abbreviated_name} (${recipientInfo?.masked_account_number}) at ${recipientInfo?.branch_name}?`}
-        confirmLabel="Send Money"
+        confirmLabel="Authorize & Send"
         loading={submitting}
         onConfirm={handleConfirmTransfer}
         onCancel={() => setShowConfirm(false)}
@@ -374,27 +404,24 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   scroll: {
-    padding: spacing.md,
-    gap: spacing.md,
+    padding: spacing.base,
+    gap: spacing.base,
   },
   body: {
     flex: 1,
-    padding: spacing.md,
+    padding: spacing.base,
     justifyContent: 'center',
   },
   sourceCard: {
-    backgroundColor: colors.surface,
-    padding: spacing.md,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
+    padding: spacing.base,
   },
   sourceLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: colors.textSecondary,
-    marginBottom: 4,
+    marginBottom: spacing.xs,
     textTransform: 'uppercase',
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   sourceRow: {
     flexDirection: 'row',
@@ -402,9 +429,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sourceNumber: {
-    fontSize: typography.body.size,
+    fontSize: 15,
     fontWeight: '700',
-    color: colors.text,
+    color: colors.textPrimary,
   },
   sourceBranch: {
     fontSize: 12,
@@ -419,166 +446,174 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   stepContainer: {
-    gap: spacing.md,
+    gap: spacing.base,
+  },
+  stepHeader: {
+    marginBottom: spacing.xs,
   },
   stepTitle: {
-    fontSize: typography.title.size,
+    fontSize: 20,
     fontWeight: '700',
-    color: colors.text,
+    color: colors.textPrimary,
   },
   stepSubtitle: {
     fontSize: 14,
     color: colors.textSecondary,
+    marginTop: 4,
     lineHeight: 20,
-    marginTop: -8,
   },
-  recipientCard: {
-    backgroundColor: colors.surface,
-    padding: spacing.md,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
+  recipientChip: {
+    padding: spacing.base,
+    borderColor: colors.borderFocus,
+    backgroundColor: '#F9FBFF',
   },
-  recipientHeader: {
+  chipRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.xs,
+    justifyContent: 'space-between',
+  },
+  chipLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
   verifiedIconPlate: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.successLight ?? '#E6F4EA',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.successBg,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.sm,
+    marginRight: spacing.md,
   },
-  verifiedIcon: {
-    color: colors.success,
-    fontWeight: '700',
-  },
-  recipientMeta: {
+  recipientTexts: {
     flex: 1,
   },
   recipientName: {
     fontSize: 15,
     fontWeight: '700',
-    color: colors.text,
+    color: colors.textPrimary,
   },
-  recipientNumber: {
-    fontSize: 13,
+  recipientMeta: {
+    fontSize: 12,
     color: colors.textSecondary,
+    marginTop: 2,
   },
   changeBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   changeBtnText: {
     fontSize: 13,
     color: colors.primary,
     fontWeight: '600',
   },
-  branchRow: {
+  previewBox: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: spacing.xs,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  previewRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 6,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
   },
-  branchLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginRight: 6,
-  },
-  branchValue: {
-    fontSize: 12,
-    color: colors.text,
-    fontWeight: '600',
-  },
-  inputGap: {
-    marginTop: spacing.xs,
-  },
-  remainingBox: {
-    backgroundColor: colors.primaryLight,
-    padding: spacing.sm + 2,
-    borderRadius: 10,
-    marginTop: -spacing.xs,
-  },
-  remainingText: {
+  previewLabel: {
     fontSize: 13,
-    color: colors.primaryDark,
+    color: colors.textSecondary,
   },
-  remainingBold: {
-    fontWeight: '700',
+  previewValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textPrimary,
   },
-  feeNotice: {
-    fontSize: 12,
-    color: colors.primaryDark,
-    marginTop: 2,
-    opacity: 0.85,
+  freeText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.success,
   },
   receiptScroll: {
     padding: spacing.lg,
-    gap: spacing.lg,
-  },
-  receiptCard: {
-    backgroundColor: colors.surface,
-    padding: spacing.lg,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingBottom: spacing.xxxl,
     alignItems: 'center',
-    gap: spacing.md,
   },
-  successIconPlate: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.successLight ?? '#E6F4EA',
+  successHero: {
+    alignItems: 'center',
+    marginVertical: spacing.xl,
+  },
+  successCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: spacing.base,
   },
-  successIcon: {
-    fontSize: 28,
-    color: colors.success,
+  successTitle: {
+    fontSize: 22,
     fontWeight: '700',
+    color: colors.textPrimary,
   },
-  receiptTitle: {
-    fontSize: 20,
+  successAmount: {
+    fontSize: 32,
     fontWeight: '700',
-    color: colors.text,
+    color: colors.textPrimary,
+    marginVertical: spacing.xs,
   },
-  receiptDetails: {
+  successRecipient: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  receiptCard: {
     width: '100%',
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    gap: 10,
+    padding: spacing.base,
+    gap: spacing.sm,
+    marginBottom: spacing.base,
   },
   receiptRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
   },
   receiptLabel: {
-    fontSize: 14,
+    fontSize: 13,
     color: colors.textSecondary,
   },
   receiptValue: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: colors.text,
+    color: colors.textPrimary,
   },
-  educationalBadge: {
-    backgroundColor: '#F3F4F6',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    marginTop: spacing.xs,
+  receiptValueFree: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.success,
   },
-  educationalText: {
-    fontSize: 11,
+  rowDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  simulatedNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: spacing.xl,
+  },
+  simulatedText: {
+    fontSize: 12,
     color: colors.textSecondary,
-    fontWeight: '500',
+  },
+  receiptActions: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    width: '100%',
+  },
+  actionButton: {
+    flex: 1,
   },
 });

@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, TextStyle, ViewStyle } from 'react-native';
 import { colors } from '../../constants/colors';
-import { formatBDT } from '../../utils/format';
+import { formatBDT, formatSignedBDT } from '../../utils/format';
 
 type MoneyProps = {
   /** Numeric value or numeric-string from Supabase NUMERIC column. */
@@ -12,6 +12,8 @@ type MoneyProps = {
   color?: string;
   weight?: TextStyle['fontWeight'];
   style?: ViewStyle;
+  sign?: 'positive' | 'negative';
+  prefix?: string;
 };
 
 /**
@@ -27,8 +29,14 @@ export function Money({
   color,
   weight,
   style,
+  sign,
+  prefix,
 }: MoneyProps) {
   const fontSize = SIZE[size].fontSize;
+  const formatted = sign
+    ? formatSignedBDT(value, sign)
+    : `${prefix ?? ''}${formatBDT(value)}`;
+
   return (
     <Text
       style={[
@@ -37,7 +45,7 @@ export function Money({
         style as TextStyle,
       ]}
     >
-      {formatBDT(value)}
+      {formatted}
     </Text>
   );
 }

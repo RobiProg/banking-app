@@ -3,18 +3,18 @@ import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ScreenHeader } from '../../components/common/ScreenHeader';
-import { Card } from '../../components/common/Card';
-import { AuthButton } from '../../components/auth/AuthButton';
+import { Button } from '../../components/ui/Button';
+import { Card } from '../../components/ui/Card';
+import { Icon } from '../../components/ui/Icon';
 import { colors } from '../../constants/colors';
-import { spacing, typography } from '../../constants/layout';
+import { radius, spacing } from '../../constants/layout';
 import { ROUTES } from '../../constants/routes';
 import { useAccount } from '../../hooks/useAccount';
 import { maskAccountNumber } from '../../utils/format';
 
 /**
  * Notice Screen: Customer Self-Deposit Disabled (BR-01, FR-DEP-01, TC-10).
- * Under SRS v2.1, arbitrary self-deposits are prohibited. Cash deposits
- * must be recorded by an authorized branch teller.
+ * Matches Figma §31 & SRS v2.2. Explains in-branch counter deposit workflow.
  */
 export default function DepositScreen() {
   const router = useRouter();
@@ -27,37 +27,49 @@ export default function DepositScreen() {
       <View style={styles.body}>
         <Card style={styles.noticeCard}>
           <View style={styles.iconCircle}>
-            <Text style={styles.icon}>ℹ</Text>
+            <Icon name="bank" size={28} color={colors.primary} />
           </View>
 
           <Text style={styles.noticeTitle}>In-Branch Deposit Only</Text>
           <Text style={styles.noticeBody}>
-            Under SmartBank financial integrity rules (SRS v2.1 BR-01), customers cannot directly increase their balance through self-deposit.
+            Under SmartBank financial integrity rules (SRS v2.2 BR-01), customers cannot directly increase their balance through self-deposit.
           </Text>
 
           <View style={styles.divider} />
 
           <Text style={styles.methodsHeader}>How to add funds to your account:</Text>
 
-          <View style={styles.stepRow}>
-            <Text style={styles.stepNumber}>1.</Text>
-            <Text style={styles.stepText}>
-              <Text style={styles.bold}>Branch Counter Deposit:</Text> Visit your assigned branch ({account?.branch?.name ?? 'Motijheel Main Branch'}) where an authorized teller or administrator can process your simulated cash deposit.
-            </Text>
+          <View style={styles.stepCard}>
+            <View style={styles.stepBadge}>
+              <Text style={styles.stepBadgeText}>1</Text>
+            </View>
+            <View style={styles.stepContent}>
+              <Text style={styles.stepTitle}>Branch Counter Deposit</Text>
+              <Text style={styles.stepDesc}>
+                Visit your assigned branch counter ({account?.branch?.name ?? 'Dhaka Motijheel Main Branch'}), where an authorized teller will accept physical currency and credit your account immediately.
+              </Text>
+            </View>
           </View>
 
-          <View style={styles.stepRow}>
-            <Text style={styles.stepNumber}>2.</Text>
-            <Text style={styles.stepText}>
-              <Text style={styles.bold}>Internal Transfer:</Text> Another SmartBank account holder can transfer funds to your account ({maskAccountNumber(account?.account_number)}).
-            </Text>
+          <View style={styles.stepCard}>
+            <View style={styles.stepBadge}>
+              <Text style={styles.stepBadgeText}>2</Text>
+            </View>
+            <View style={styles.stepContent}>
+              <Text style={styles.stepTitle}>Internal P2P Transfer</Text>
+              <Text style={styles.stepDesc}>
+                Another SmartBank customer can transfer funds instantly to your account number ({maskAccountNumber(account?.account_number)}).
+              </Text>
+            </View>
           </View>
         </Card>
 
         <View style={styles.ctaContainer}>
-          <AuthButton
+          <Button
             title="Return to Dashboard"
             onPress={() => router.replace(ROUTES.customer)}
+            size="lg"
+            variant="primary"
           />
         </View>
       </View>
@@ -72,71 +84,86 @@ const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
-    padding: spacing.lg,
+    padding: spacing.base,
     justifyContent: 'space-between',
   },
   noticeCard: {
     padding: spacing.lg,
-    borderRadius: 16,
+    borderRadius: radius.xl,
+    gap: spacing.md,
   },
   iconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
-    marginBottom: spacing.md,
-  },
-  icon: {
-    fontSize: 24,
-    color: colors.primary,
-    fontWeight: '700',
+    marginBottom: spacing.xs,
   },
   noticeTitle: {
-    fontSize: typography.title.size,
-    fontWeight: typography.title.weight,
-    color: colors.text,
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.textPrimary,
     textAlign: 'center',
-    marginBottom: spacing.sm,
   },
   noticeBody: {
-    fontSize: typography.body.size,
+    fontSize: 14,
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 20,
+    paddingHorizontal: spacing.sm,
   },
   divider: {
     height: 1,
     backgroundColor: colors.border,
-    marginVertical: spacing.lg,
+    marginVertical: spacing.xs,
   },
   methodsHeader: {
-    fontSize: typography.label.size,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  stepRow: {
-    flexDirection: 'row',
-    marginBottom: spacing.md,
-  },
-  stepNumber: {
-    width: 20,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  stepText: {
-    flex: 1,
-    fontSize: typography.body.size,
-    color: colors.text,
-    lineHeight: 20,
-  },
-  bold: {
+    fontSize: 15,
     fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  stepCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  stepBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  stepBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textOnPrimary,
+  },
+  stepContent: {
+    flex: 1,
+  },
+  stepTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: 2,
+  },
+  stepDesc: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    lineHeight: 18,
   },
   ctaContainer: {
-    marginTop: spacing.lg,
+    paddingVertical: spacing.sm,
   },
 });

@@ -2,8 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { Avatar } from '../../../components/ui/Avatar';
+import { Badge } from '../../../components/ui/Badge';
+import { Button } from '../../../components/ui/Button';
+import { Card } from '../../../components/ui/Card';
+import { Icon } from '../../../components/ui/Icon';
 import { colors } from '../../../constants/colors';
-import { spacing, typography } from '../../../constants/layout';
+import { radius, shadows, spacing, typography } from '../../../constants/layout';
 import { ROUTES } from '../../../constants/routes';
 import { LoadingState } from '../../../components/common/LoadingState';
 import { ErrorState } from '../../../components/common/ErrorState';
@@ -14,8 +19,8 @@ import { getAdminStats, type AdminStats } from '../../../services/admin';
 import { signOut } from '../../../services/auth';
 
 /**
- * Admin dashboard (Phase 14).
- * Shows 4 simple stat cards. Plan says "Keep statistics simple."
+ * Admin Dashboard Screen.
+ * Visual design aligned with SmartBank Figma Design Specification.
  */
 export default function AdminDashboardScreen() {
   const router = useRouter();
@@ -55,7 +60,7 @@ export default function AdminDashboardScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.body}>
-          <LoadingState label="Loading statistics…" />
+          <LoadingState label="Loading bank statistics…" />
         </View>
       </SafeAreaView>
     );
@@ -85,34 +90,52 @@ export default function AdminDashboardScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Top Header Row with Avatar & Sign-out */}
         <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.title}>Admin dashboard</Text>
-            <Text style={styles.subtitle}>
-              Welcome back{profile?.full_name ? `, ${profile.full_name.split(' ')[0]}` : ''}.
-            </Text>
+          <View style={styles.adminProfileInfo}>
+            <Avatar name={profile?.full_name ?? 'Admin Officer'} size={44} />
+            <View style={styles.greetingTextGroup}>
+              <View style={styles.roleRow}>
+                <Text style={styles.title}>Admin Portal</Text>
+                <Badge label="Staff / Supervisor" variant="primary" />
+              </View>
+              <Text style={styles.subtitle}>
+                {profile?.full_name ? `Welcome back, ${profile.full_name}` : 'Overview & Operations'}
+              </Text>
+            </View>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Sign out"
+
+          <Button
+            title="Sign out"
+            variant="outline"
+            size="sm"
+            icon="logout"
             onPress={() => setShowSignOutConfirm(true)}
-            style={({ pressed }) => [styles.signOutBtn, pressed && styles.pressed]}
-          >
-            <Text style={styles.signOutText}>{signingOut ? 'Signing out…' : 'Sign out'}</Text>
-          </Pressable>
+          />
+        </View>
+
+        {/* Big-number Stats Grid */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>System Statistics</Text>
+          <Text style={styles.sectionSubtitle}>Live bank metrics from PostgreSQL</Text>
         </View>
 
         <View style={styles.grid}>
-          <StatCard label="Total users" value={stats.totalUsers} glyph="◐" />
-          <StatCard label="Total accounts" value={stats.totalAccounts} glyph="▤" />
-          <StatCard label="Active accounts" value={stats.activeAccounts} glyph="✓" />
-          <StatCard label="Total transactions" value={stats.totalTransactions} glyph="≡" />
-          <StatCard label="Total branches" value={stats.totalBranches ?? 0} glyph="🏛" />
+          <StatCard label="Total Users" value={stats.totalUsers} icon="users" />
+          <StatCard label="Total Accounts" value={stats.totalAccounts} icon="card" />
+          <StatCard label="Active Accounts" value={stats.activeAccounts} icon="check-circle" />
+          <StatCard label="Total Transactions" value={stats.totalTransactions} icon="document" />
+          <StatCard label="Branch Network" value={stats.totalBranches ?? 0} icon="bank" />
         </View>
 
+        {/* Staff Operator Quick Actions */}
         <View style={styles.quickSection}>
-          <Text style={styles.quickTitle}>Staff Operator Actions</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Counter & Branch Actions</Text>
+            <Text style={styles.sectionSubtitle}>Operational tools for tellers and supervisors</Text>
+          </View>
+
           <View style={styles.quickRow}>
             <Pressable
               accessibilityRole="button"
@@ -120,39 +143,48 @@ export default function AdminDashboardScreen() {
               onPress={() => router.push(ROUTES.adminDeposit)}
               style={({ pressed }) => [styles.quickCard, styles.quickCardPrimary, pressed && styles.pressed]}
             >
-              <Text style={styles.quickIcon}>💵</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.quickCardTitle}>Branch Cash Deposit</Text>
-                <Text style={styles.quickCardDesc}>Record simulated counter cash intake (FR-DEP-01)</Text>
+              <View style={styles.actionIconCircle}>
+                <Icon name="deposit" size={24} color={colors.primary} />
               </View>
-              <Text style={styles.quickArrow}>→</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.quickCardTitle}>Branch Cash Counter Deposit</Text>
+                <Text style={styles.quickCardDesc}>Accept physical currency and credit customer account (FR-DEP-01)</Text>
+              </View>
+              <Icon name="chevron-right" size={18} color={colors.primary} />
             </Pressable>
 
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Manage branches"
+              accessibilityLabel="Manage branch network"
               onPress={() => router.push(ROUTES.adminBranches)}
               style={({ pressed }) => [styles.quickCard, pressed && styles.pressed]}
             >
-              <Text style={styles.quickIcon}>🏛</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.quickCardTitle}>Branch Network</Text>
-                <Text style={styles.quickCardDesc}>Manage 8+ Bangladesh regional branches (FR-ADM-06)</Text>
+              <View style={styles.actionIconCircle}>
+                <Icon name="bank" size={24} color={colors.textPrimary} />
               </View>
-              <Text style={styles.quickArrow}>→</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.quickCardTitle}>Branch Network Management</Text>
+                <Text style={styles.quickCardDesc}>Provision and audit 8+ Bangladesh regional branches (FR-ADM-06)</Text>
+              </View>
+              <Icon name="chevron-right" size={18} color={colors.textSecondary} />
             </Pressable>
           </View>
         </View>
 
-        <Text style={styles.helper}>
-          Use the tabs below to view users, manage account status, and monitor transactions.
-        </Text>
+        <Card variant="surface" style={styles.guidanceCard}>
+          <View style={styles.guidanceRow}>
+            <Icon name="info" size={18} color={colors.primary} />
+            <Text style={styles.guidanceText}>
+              Audit-trail enforcement: Account activations, blocks, and cash deposits are logged to audit tables with operator UUIDs.
+            </Text>
+          </View>
+        </Card>
       </ScrollView>
 
       <ConfirmDialog
         visible={showSignOutConfirm}
-        title="Sign out?"
-        message="You will need to sign in again to use SmartBank."
+        title="Sign out of Admin Portal?"
+        message="You will need to sign in again to access administrative features."
         confirmLabel="Sign out"
         cancelLabel="Cancel"
         destructive
@@ -165,83 +197,123 @@ export default function AdminDashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
-  body: { flex: 1, paddingHorizontal: spacing.lg, justifyContent: 'center' },
+  safe: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  body: {
+    flex: 1,
+    paddingHorizontal: spacing.lg,
+    justifyContent: 'center',
+  },
   scroll: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xl,
-    gap: spacing.lg,
+    paddingTop: spacing.base,
+    paddingBottom: spacing.xxl,
+    gap: spacing.xl,
   },
   headerRow: {
-    paddingTop: spacing.md,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingVertical: spacing.xs,
   },
-  title: { fontSize: 24, fontWeight: '700', color: colors.text },
-  subtitle: { fontSize: typography.subtitle.size, color: colors.textMuted, marginTop: 2 },
-  signOutBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+  adminProfileInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flex: 1,
   },
-  signOutText: {
-    fontSize: typography.body.size,
-    fontWeight: '600',
-    color: colors.error,
+  greetingTextGroup: {
+    flex: 1,
+    gap: 2,
   },
-  pressed: { opacity: 0.7 },
+  roleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  sectionHeader: {
+    gap: 2,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  pressed: {
+    opacity: 0.85,
+  },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.md,
+    gap: spacing.base,
   },
   quickSection: {
-    gap: spacing.sm,
-  },
-  quickTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
+    gap: spacing.md,
   },
   quickRow: {
-    gap: spacing.sm,
+    gap: spacing.md,
   },
   quickCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 12,
-    padding: spacing.md,
-    gap: spacing.md,
+    borderRadius: radius.lg,
+    padding: spacing.base,
+    gap: spacing.base,
+    ...shadows.sm,
   },
   quickCardPrimary: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryLight,
+    borderColor: 'rgba(10, 107, 211, 0.3)',
+    backgroundColor: '#F9FBFF',
   },
-  quickIcon: {
-    fontSize: 24,
+  actionIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   quickCardTitle: {
     fontSize: 15,
-    fontWeight: '700',
-    color: colors.text,
+    fontWeight: '600',
+    color: colors.textPrimary,
   },
   quickCardDesc: {
     fontSize: typography.caption.size,
-    color: colors.textMuted,
+    color: colors.textSecondary,
     marginTop: 2,
   },
-  quickArrow: {
-    fontSize: 18,
-    color: colors.primaryDark,
-    fontWeight: '700',
+  guidanceCard: {
+    padding: spacing.base,
+    borderRadius: radius.md,
   },
-  helper: { fontSize: typography.helper.size, color: colors.textMuted },
+  guidanceRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  guidanceText: {
+    flex: 1,
+    fontSize: 12,
+    color: colors.textSecondary,
+    lineHeight: 18,
+  },
 });

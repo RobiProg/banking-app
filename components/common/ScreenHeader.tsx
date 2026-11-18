@@ -1,8 +1,9 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Icon } from '../ui/Icon';
 import { colors } from '../../constants/colors';
-import { spacing, typography } from '../../constants/layout';
+import { radius, spacing } from '../../constants/layout';
 
 type ScreenHeaderProps = {
   title: string;
@@ -16,7 +17,7 @@ type ScreenHeaderProps = {
 
 /**
  * Standard top bar used by every screen that's not in the tabs.
- * Mirrors the design system spec from DESIGN_PROMPT §2 ("title 24 pt").
+ * Mirrors the Figma design system spec (clean back button, 20pt bold title).
  */
 export function ScreenHeader({
   title,
@@ -48,19 +49,21 @@ export function ScreenHeader({
             accessibilityRole="button"
             accessibilityLabel="Go back"
             onPress={handleBack}
-            hitSlop={12}
+            hitSlop={10}
             style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
           >
-            <Text style={styles.backIcon}>‹</Text>
+            <Icon name="chevron-left" size={22} color={colors.textPrimary} />
           </Pressable>
         ) : (
-          <View style={styles.backBtn} />
+          <View style={styles.backBtnPlaceholder} />
         )}
+
         <View style={styles.titleWrap}>
           <Text style={styles.title} numberOfLines={1}>
             {title}
           </Text>
         </View>
+
         {rightLabel ? (
           <Pressable
             accessibilityRole="button"
@@ -72,7 +75,7 @@ export function ScreenHeader({
             <Text style={styles.rightLabel}>{rightLabel}</Text>
           </Pressable>
         ) : (
-          <View style={styles.rightBtn} />
+          <View style={styles.rightBtnPlaceholder} />
         )}
       </View>
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
@@ -82,53 +85,68 @@ export function ScreenHeader({
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
+    paddingHorizontal: spacing.base,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm,
+    backgroundColor: colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 44,
+    justifyContent: 'space-between',
+    minHeight: 48,
   },
   backBtn: {
-    width: 44,
-    height: 44,
-    alignItems: 'flex-start',
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  backIcon: {
-    fontSize: 28,
-    color: colors.text,
-    fontWeight: '600',
-    marginTop: -4,
+  backBtnPlaceholder: {
+    width: 36,
   },
   titleWrap: {
     flex: 1,
     alignItems: 'center',
-  },
-  title: {
-    fontSize: typography.title.size - 4, // 24
-    fontWeight: typography.title.weight,
-    color: colors.text,
-  },
-  subtitle: {
-    marginTop: spacing.xs,
-    fontSize: typography.subtitle.size,
-    color: colors.textMuted,
-    lineHeight: typography.subtitle.size * 1.4,
-  },
-  rightBtn: {
-    minWidth: 60,
-    alignItems: 'flex-end',
     justifyContent: 'center',
-    minHeight: 44,
     paddingHorizontal: spacing.sm,
   },
+  title: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    textAlign: 'center',
+  },
+  rightBtn: {
+    minWidth: 36,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.sm,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  rightBtnPlaceholder: {
+    width: 36,
+  },
   rightLabel: {
+    fontSize: 14,
     color: colors.primary,
-    fontSize: typography.body.size,
     fontWeight: '600',
   },
-  pressed: { opacity: 0.7 },
+  subtitle: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  pressed: {
+    opacity: 0.7,
+  },
 });

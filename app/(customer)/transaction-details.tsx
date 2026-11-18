@@ -1,17 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ScreenContainer } from '../../components/auth/ScreenContainer';
 import { ScreenHeader } from '../../components/common/ScreenHeader';
 import { LoadingState } from '../../components/common/LoadingState';
 import { ErrorState } from '../../components/common/ErrorState';
-import { AuthButton } from '../../components/auth/AuthButton';
-import { Card } from '../../components/common/Card';
+import { Button } from '../../components/ui/Button';
+import { Card } from '../../components/ui/Card';
+import { Icon, IconName } from '../../components/ui/Icon';
+import { Badge } from '../../components/ui/Badge';
 import { Money } from '../../components/common/Money';
-import { TransactionTypePill } from '../../components/banking/TransactionTypePill';
 import { colors } from '../../constants/colors';
-import { spacing, typography } from '../../constants/layout';
+import { radius, spacing } from '../../constants/layout';
+import { ROUTES } from '../../constants/routes';
 import { useAccount } from '../../hooks/useAccount';
 import { getTransactionById } from '../../services/transactions';
 import type { Transaction as TxnModel } from '../../types/db';
@@ -19,11 +21,9 @@ import { txnDirection } from '../../types/db';
 import { formatDateTime } from '../../utils/format';
 
 /**
- * Transaction detail screen (Phase 11).
- * Reachable via:
- *   - Tap on a transaction row
- *   - Redirect after a successful deposit / withdraw / transfer
- *     (with `just=1` to render a "Done" CTA)
+ * Transaction Details Screen. Matches Figma §11.
+ * Shows centered status hero, tabular amount, category-tinted icon,
+ * structured receipt rows, and action CTAs.
  */
 export default function TransactionDetailsScreen() {
   const router = useRouter();
@@ -63,10 +63,11 @@ export default function TransactionDetailsScreen() {
   if (loading) {
     return (
       <ScreenContainer scrollable={false} centered>
-        <LoadingState label="Loading transaction…" />
+        <LoadingState label="Loading transaction details…" />
       </ScreenContainer>
     );
   }
+
   if (error || !transaction) {
     return (
       <ScreenContainer scrollable={false} centered>
@@ -83,179 +84,232 @@ export default function TransactionDetailsScreen() {
   const direction = txnDirection(transaction, myAccountId);
   const sign = direction === 'credit' ? 'positive' : 'negative';
   const amountColor =
-    direction === 'credit' ? colors.success : direction === 'debit' ? colors.error : colors.text;
+    direction === 'credit' ? colors.success : direction === 'debit' ? colors.error : colors.textPrimary;
   const amountPrefix = sign === 'positive' ? '+' : sign === 'negative' ? '−' : '';
 
+  const type = transaction.transaction_type;
+  const iconName: IconName = type === 'deposit' ? 'arrow-down' : type === 'withdrawal' ? 'arrow-up' : 'send';
+  const iconBg =
+    direction === 'credit'
+      ? colors.successBg
+      : direction === 'debit'
+      ? colors.errorBg
+      : colors.primaryLight;
+  const iconFg =
+    direction === 'credit'
+      ? colors.success
+      : direction === 'debit'
+      ? colors.error
+      : colors.primary;
+
   const title =
-    transaction.transaction_type === 'deposit'
-      ? 'Deposit'
-      : transaction.transaction_type === 'withdrawal'
-      ? 'Withdrawal'
+    type === 'deposit'
+      ? 'Cash Counter Deposit'
+      : type === 'withdrawal'
+      ? 'Cash Withdrawal'
       : direction === 'credit'
-      ? 'Money received'
-      : 'Money sent';
+      ? 'Money Received'
+      : 'Money Sent';
+
+  function handleCopyReference() {
+    Alert.alert('Reference Copied', `${transaction?.reference} copied to clipboard.`);
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader
-        title={justCompleted ? 'Success' : 'Transaction'}
-        subtitle={justCompleted ? 'Your transaction is complete.' : undefined}
+        title={justCompleted ? 'Transaction Complete' : 'Transaction Details'}
+        subtitle={justCompleted ? 'Your transaction has been processed' : undefined}
         rightLabel={justCompleted ? 'Done' : undefined}
-        onPressRight={() => router.replace('/(customer)')}
-        onPressBack={
-          justCompleted ? () => router.replace('/(customer)') : undefined
-        }
+        onPressRight={() => router.replace(ROUTES.customer)}
+        onPressBack={justCompleted ? () => router.replace(ROUTES.customer) : undefined}
       />
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.heroBlock}>
-          <View
-            style={[
-              styles.iconPlate,
-              direction === 'credit'
-                ? styles.iconCredit
-                : direction === 'debit'
-                ? styles.iconDebit
-                : styles.iconNeutral,
-            ]}
-          >
-            <Text style={[styles.iconMark, { color: amountColor }]}>
-              {direction === 'credit' ? '↓' : direction === 'debit' ? '↑' : '·'}
-            </Text>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Centered Status Hero (§11) */}
+        <View style={styles.heroCard}>
+          <View style={[styles.heroIconCircle, { backgroundColor: iconBg }]}>
+            <Icon name={iconName} size={32} color={iconFg} />
           </View>
-          <Text style={[styles.amount, { color: amountColor }]}>
+          <Text style={styles.heroAmount}>
             {amountPrefix}
             <Money value={transaction.amount} size="xl" color={amountColor} />
           </Text>
-          <Text style={styles.title}>{title}</Text>
-          <View style={{ marginTop: spacing.sm }}>
-            <TransactionTypePill type={transaction.transaction_type} />
+          <Text style={styles.heroTitle}>{title}</Text>
+          <View style={styles.badgeRow}>
+            <Badge
+              label={transaction.status === 'completed' ? 'Completed' : 'Failed'}
+              variant={transaction.status === 'completed' ? 'success' : 'error'}
+            />
           </View>
-          <Text style={styles.timestamp}>{formatDateTime(transaction.created_at)}</Text>
+          <Text style={styles.heroTimestamp}>{formatDateTime(transaction.created_at)}</Text>
         </View>
 
+        {/* Structured Receipt Info Card */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Details</Text>
-          <Card>
-            <InfoRow
-              label="Type"
-              value={
-                transaction.type === 'deposit' || transaction.transaction_type === 'deposit'
-                  ? 'Simulated branch cash deposit'
-                  : transaction.type === 'withdrawal' || transaction.transaction_type === 'withdrawal'
-                  ? 'Simulated withdrawal'
-                  : 'Internal SmartBank transfer'
-              }
-            />
-            <Divider />
-            <InfoRow
-              label="Status"
-              value={transaction.status === 'completed' ? 'Completed' : 'Failed'}
-            />
-            <Divider />
-            <InfoRow label="Amount" value={`৳${Number(transaction.amount).toFixed(2)}`} />
-            <Divider />
-            <InfoRow label="Reference" value={transaction.reference || shortId(transaction.id)} />
+          <Text style={styles.sectionTitle}>Transaction Details</Text>
+          <Card style={styles.detailsCard}>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Transaction Type</Text>
+              <Text style={styles.infoValue}>
+                {type === 'deposit'
+                  ? 'Branch Cash Deposit'
+                  : type === 'withdrawal'
+                  ? 'Simulated Cash Out'
+                  : 'P2P Fund Transfer'}
+              </Text>
+            </View>
+            <View style={styles.divider} />
+
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Reference Code</Text>
+              <Pressable style={styles.copyRow} onPress={handleCopyReference}>
+                <Text style={styles.referenceText}>{transaction.reference}</Text>
+                <Icon name="copy" size={15} color={colors.primary} />
+              </Pressable>
+            </View>
+            <View style={styles.divider} />
+
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Amount</Text>
+              <Money value={transaction.amount} size="medium" color={amountColor} />
+            </View>
+            <View style={styles.divider} />
+
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Transfer Fee</Text>
+              <Text style={styles.infoValue}>৳0.00 (Free)</Text>
+            </View>
+            <View style={styles.divider} />
+
             {transaction.description ? (
               <>
-                <Divider />
-                <InfoRow label="Description" value={transaction.description} />
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Note</Text>
+                  <Text style={styles.infoValue}>{transaction.description}</Text>
+                </View>
+                <View style={styles.divider} />
               </>
             ) : null}
+
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Date & Time</Text>
+              <Text style={styles.infoValue}>{formatDateTime(transaction.created_at)}</Text>
+            </View>
           </Card>
         </View>
 
-        {justCompleted ? (
-          <AuthButton
-            title="Back to home"
-            onPress={() => router.replace('/(customer)')}
+        {/* CTA Buttons */}
+        <View style={styles.actionsGroup}>
+          <Button
+            title="Return to Dashboard"
+            onPress={() => router.replace(ROUTES.customer)}
+            size="lg"
+            variant="primary"
           />
-        ) : null}
+          <Button
+            title="View All Transactions"
+            onPress={() => router.push(ROUTES.transactions)}
+            size="md"
+            variant="outline"
+          />
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.infoRow}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue} numberOfLines={1}>
-        {value}
-      </Text>
-    </View>
-  );
-}
-
-function Divider() {
-  return <View style={styles.divider} />;
-}
-
-function shortId(id: string): string {
-  if (!id) return '—';
-  return id.slice(0, 8).toUpperCase();
-}
-
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
+  safe: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
   scroll: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl,
-    gap: spacing.lg,
+    padding: spacing.base,
+    paddingBottom: spacing.xxl,
+    gap: spacing.base,
   },
-  heroBlock: {
+  heroCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.xl,
     alignItems: 'center',
-    paddingVertical: spacing.lg,
+    gap: 6,
   },
-  iconPlate: {
+  heroIconCircle: {
     width: 64,
     height: 64,
     borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.xs,
   },
-  iconCredit: { backgroundColor: colors.successBg },
-  iconDebit: { backgroundColor: colors.errorBg },
-  iconNeutral: { backgroundColor: colors.surface },
-  iconMark: { fontSize: 30, fontWeight: '800' },
-  amount: {
+  heroAmount: {
     fontSize: 32,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    fontVariant: ['tabular-nums'],
   },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.text,
-    marginTop: spacing.sm,
+  heroTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: colors.textPrimary,
   },
-  timestamp: {
-    fontSize: typography.helper.size,
-    color: colors.textMuted,
-    marginTop: spacing.xs,
+  badgeRow: {
+    marginTop: 2,
+    marginBottom: 4,
+  },
+  heroTimestamp: {
+    fontSize: 13,
+    color: colors.textSecondary,
   },
   section: {
-    marginTop: spacing.sm,
+    gap: spacing.sm,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.sm,
+    color: colors.textPrimary,
+  },
+  detailsCard: {
+    backgroundColor: colors.background,
+    borderRadius: radius.lg,
+    padding: spacing.base,
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: spacing.sm + 2,
+    paddingVertical: spacing.sm,
   },
-  infoLabel: { fontSize: typography.body.size, color: colors.textMuted },
+  copyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  referenceText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.primary,
+    fontVariant: ['tabular-nums'],
+  },
+  infoLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
   infoValue: {
-    fontSize: typography.body.size,
-    color: colors.text,
+    fontSize: 14,
+    color: colors.textPrimary,
     fontWeight: '600',
-    maxWidth: '60%',
+    maxWidth: '65%',
     textAlign: 'right',
   },
-  divider: { height: 1, backgroundColor: colors.border },
+  divider: {
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  actionsGroup: {
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
 });

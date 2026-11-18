@@ -1,30 +1,61 @@
 /**
- * SmartBank visual identity.
+ * SmartBank Visual Design Tokens
+ * Aligned with Figma Design System Specification (§0).
  *
- * Plain colors only (no theme objects yet) to keep things simple.
- * Later phases can layer a full theme system on top of these.
+ * Brand primary: #0A6BD3 (corporate blue, trust + stability)
+ * High contrast, WCAG AA compliant.
  */
 export const colors = {
+  // Brand Primary & Variations
   primary: '#0A6BD3',
   primaryDark: '#0856A8',
   primaryLight: '#E6F0FB',
+  primaryMuted: '#B3D4F9',
 
+  // Surfaces & Backgrounds
   background: '#FFFFFF',
   surface: '#F5F7FA',
-  border: '#E2E6EB',
+  surfaceRaised: '#FFFFFF',
+  surfaceSubtle: '#F0F3F7',
 
+  // Borders & Dividers
+  border: '#E2E6EB',
+  borderStrong: '#CBD5E1',
+  borderFocus: '#0A6BD3',
+
+  // Typography & Content
   text: '#0B1B2B',
-  textMuted: '#6B7280',
+  textPrimary: '#0B1B2B',
   textSecondary: '#6B7280',
+  textMuted: '#6B7280',
+  textTertiary: '#9CA3AF',
   textOnPrimary: '#FFFFFF',
 
+  // Semantic Status: Error
   error: '#D32F2F',
   errorBg: '#FDECEC',
   errorLight: '#FCE8E6',
+  errorBorder: '#F5A9A9',
+
+  // Semantic Status: Warning
   warning: '#ED6C02',
+  warningBg: '#FFF4E5',
+  warningLight: '#FFF4E5',
+  warningBorder: '#FFD19A',
+
+  // Semantic Status: Success
   success: '#2E7D32',
   successBg: '#E6F4EA',
   successLight: '#E6F4EA',
+  successBorder: '#A3D9A5',
+
+  // Financial Category & Accent Colors
+  accentNavy: '#0F2942',
+  accentBlue: '#0284C7',
+  accentPurple: '#7C3AED',
+  accentTeal: '#0D9488',
+  accentEmerald: '#059669',
+  accentAmber: '#D97706',
 } as const;
 
 export type ColorKey = keyof typeof colors;

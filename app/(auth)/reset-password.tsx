@@ -1,20 +1,19 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ScreenContainer } from '../../components/auth/ScreenContainer';
-import { AuthInput } from '../../components/auth/AuthInput';
-import { AuthButton } from '../../components/auth/AuthButton';
 import { FormErrorBanner } from '../../components/auth/FormErrorBanner';
-import { FormSuccessBanner } from '../../components/auth/FormSuccessBanner';
+import { ScreenContainer } from '../../components/auth/ScreenContainer';
+import { Button } from '../../components/ui/Button';
+import { Icon } from '../../components/ui/Icon';
+import { TextInput } from '../../components/ui/TextInput';
 import { colors } from '../../constants/colors';
-import { spacing, typography } from '../../constants/layout';
+import { radius, spacing, typography } from '../../constants/layout';
 import { ROUTES } from '../../constants/routes';
 import { resetPasswordForEmail } from '../../services/auth';
 import { isValidEmail } from '../../utils/validation';
 
 /**
- * Password Reset Screen (SRS v2.1 FR-AUTH-04, TC-19).
- * Initiates Supabase Auth password reset email.
+ * Password Recovery Screen. Matches Figma §2 / SRS v2.2 FR-AUTH-04.
  */
 export default function ResetPasswordScreen() {
   const router = useRouter();
@@ -45,30 +44,49 @@ export default function ResetPasswordScreen() {
 
   return (
     <ScreenContainer>
-      <Text style={styles.title}>Reset Password</Text>
-      <Text style={styles.subtitle}>
-        Enter your registered email address and we will send you instructions to reset your password.
-      </Text>
+      {/* Top Bar with Back Arrow */}
+      <View style={styles.topBar}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Back to sign in"
+          onPress={() => router.back()}
+          hitSlop={12}
+          style={styles.backButton}
+        >
+          <Icon name="chevron-left" size={24} color={colors.textPrimary} />
+        </Pressable>
+        <Text style={styles.topBarTitle}>Recovery</Text>
+        <View style={styles.topBarSpacer} />
+      </View>
+
+      <View style={styles.header}>
+        <Text style={styles.title}>Reset password</Text>
+        <Text style={styles.subtitle}>
+          Enter your registered email address and we will send you secure instructions to reset your password.
+        </Text>
+      </View>
 
       {sent ? (
         <View style={styles.successBox}>
           <View style={styles.iconPlate}>
-            <Text style={styles.icon}>✉</Text>
+            <Icon name="mail" size={28} color={colors.primary} />
           </View>
           <Text style={styles.successTitle}>Check your inbox</Text>
           <Text style={styles.successBody}>
-            We have sent password reset instructions to <Text style={styles.bold}>{email}</Text>. Please follow the link in the email.
+            We have sent password reset instructions to{' '}
+            <Text style={styles.bold}>{email}</Text>. Please follow the link in the message.
           </Text>
           <View style={styles.spacer} />
-          <AuthButton
-            title="Return to Sign In"
+          <Button
+            title="Return to sign in"
             onPress={() => router.replace(ROUTES.login)}
+            size="lg"
           />
         </View>
       ) : (
         <View style={styles.form}>
-          <AuthInput
-            label="Email Address"
+          <TextInput
+            label="Email address"
             value={email}
             onChangeText={(t) => {
               setEmail(t);
@@ -78,28 +96,32 @@ export default function ResetPasswordScreen() {
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
+            leftIcon="mail"
             editable={!loading}
           />
 
           <FormErrorBanner message={error} />
 
-          <AuthButton
-            title="Send Reset Link"
+          <Button
+            title="Send reset link"
             onPress={handleReset}
             loading={loading}
             disabled={!email.trim()}
+            size="lg"
+            accessibilityHint="Dispatches a recovery email"
           />
 
-          <Text style={styles.footerText}>
-            Remember your password?{' '}
-            <Text
+          <View style={styles.footerRow}>
+            <Text style={styles.footerText}>Remember your password?</Text>
+            <Pressable
               accessibilityRole="link"
-              style={styles.footerLink}
+              accessibilityLabel="Sign in"
               onPress={() => router.replace(ROUTES.login)}
+              hitSlop={8}
             >
-              Sign In
-            </Text>
-          </Text>
+              <Text style={styles.footerLink}>Sign in</Text>
+            </Pressable>
+          </View>
         </View>
       )}
     </ScreenContainer>
@@ -107,65 +129,94 @@ export default function ResetPasswordScreen() {
 }
 
 const styles = StyleSheet.create({
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.base,
+    marginTop: -spacing.xs,
+  },
+  backButton: {
+    padding: spacing.xs,
+  },
+  topBarTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  topBarSpacer: {
+    width: 32,
+  },
+  header: {
+    marginBottom: spacing.xl,
+  },
   title: {
-    fontSize: typography.title.size,
-    fontWeight: typography.title.weight,
-    color: colors.text,
-    marginBottom: spacing.xs,
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: typography.subtitle.size,
-    color: colors.textMuted,
-    marginBottom: spacing.lg,
+    fontSize: 15,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
     lineHeight: 22,
   },
   form: {
-    gap: spacing.sm,
+    marginBottom: spacing.xl,
   },
   successBox: {
     alignItems: 'center',
-    paddingVertical: spacing.lg,
-    gap: spacing.sm,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.base,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   iconPlate: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.sm,
-  },
-  icon: {
-    fontSize: 28,
-    color: colors.primary,
+    marginBottom: spacing.base,
   },
   successTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: colors.text,
+    color: colors.textPrimary,
+    marginBottom: spacing.sm,
   },
   successBody: {
-    fontSize: typography.body.size,
-    color: colors.textMuted,
+    fontSize: 14,
+    color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 20,
   },
   bold: {
-    fontWeight: '600',
-    color: colors.text,
+    fontWeight: '700',
+    color: colors.textPrimary,
   },
   spacer: {
-    height: spacing.md,
+    height: spacing.xl,
+    width: '100%',
+  },
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: spacing.xl,
   },
   footerText: {
-    color: colors.textMuted,
-    fontSize: typography.body.size,
-    textAlign: 'center',
-    marginTop: spacing.lg,
+    fontSize: 14,
+    color: colors.textSecondary,
   },
   footerLink: {
+    fontSize: 14,
+    fontWeight: '600',
     color: colors.primary,
-    fontWeight: '700',
+    marginLeft: spacing.xs + 2,
   },
 });

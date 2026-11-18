@@ -8,7 +8,7 @@ import { ROUTES, transactionDetailsPath } from '../../../constants/routes';
 import { LoadingState } from '../../../components/common/LoadingState';
 import { ErrorState } from '../../../components/common/ErrorState';
 import { EmptyState } from '../../../components/common/EmptyState';
-import { AuthInput } from '../../../components/auth/AuthInput';
+import { TextInput } from '../../../components/ui/TextInput';
 import { TransactionTypePill } from '../../../components/banking/TransactionTypePill';
 import { Money } from '../../../components/common/Money';
 import { listAllTransactions, type AdminTxnFilters } from '../../../services/admin';
@@ -105,11 +105,11 @@ export default function AdminTransactionsTab() {
           ))}
         </ScrollView>
         <View style={styles.searchWrap}>
-          <AuthInput
-            label=""
+          <TextInput
             value={search}
             onChangeText={setSearch}
-            placeholder="Search by reference (TXN-...), note, or id"
+            placeholder="Search by reference (TXN-...), note, or ID"
+            leftIcon="search"
             autoCapitalize="none"
             autoCorrect={false}
             containerStyle={{ marginBottom: 0 }}

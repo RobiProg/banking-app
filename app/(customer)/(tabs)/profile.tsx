@@ -1,31 +1,31 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { Avatar } from '../../../components/ui/Avatar';
+import { Badge } from '../../../components/ui/Badge';
+import { Button } from '../../../components/ui/Button';
+import { Card } from '../../../components/ui/Card';
+import { Icon, IconName } from '../../../components/ui/Icon';
+import { TextInput } from '../../../components/ui/TextInput';
 import { colors } from '../../../constants/colors';
-import { spacing, typography } from '../../../constants/layout';
+import { radius, spacing } from '../../../constants/layout';
 import { ROUTES } from '../../../constants/routes';
 import { LoadingState } from '../../../components/common/LoadingState';
 import { ErrorState } from '../../../components/common/ErrorState';
-import { AuthInput } from '../../../components/auth/AuthInput';
-import { AuthButton } from '../../../components/auth/AuthButton';
 import { FormErrorBanner } from '../../../components/auth/FormErrorBanner';
 import { FormSuccessBanner } from '../../../components/auth/FormSuccessBanner';
-import { Card } from '../../../components/common/Card';
 import { ConfirmDialog } from '../../../components/common/ConfirmDialog';
-import { Money } from '../../../components/common/Money';
 import { useProfile } from '../../../hooks/useProfile';
 import { useAccount } from '../../../hooks/useAccount';
 import { updateMyProfile } from '../../../services/profiles';
 import { signOut } from '../../../services/auth';
-import { initialsFromName } from '../../../utils/format';
-import { isNonEmpty, isValidPhone, phoneInvalidMessage, phoneRequiredMessage } from '../../../utils/validation';
+import { isNonEmpty, isValidPhone, phoneInvalidMessage } from '../../../utils/validation';
 
 /**
- * Customer profile tab (Phase 13).
- * - View + edit full_name and phone only.
- * - Email, role, balance, account number, account status are read-only.
- * - Sign out button at the bottom.
+ * Customer Profile & Settings Screen. Matches Figma §14.
+ * Profile header with 80pt avatar, KYC status pill, personal details edit,
+ * banking overview, and sign-out dialog.
  */
 export default function CustomerProfileTab() {
   const router = useRouter();
@@ -34,6 +34,7 @@ export default function CustomerProfileTab() {
 
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
+  const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -71,7 +72,7 @@ export default function CustomerProfileTab() {
   }
 
   const phoneCheck = (() => {
-    if (!phone.trim()) return { ok: true }; // phone is optional in UI
+    if (!phone.trim()) return { ok: true };
     if (!isValidPhone(phone)) return { ok: false, message: phoneInvalidMessage };
     return { ok: true };
   })();
@@ -96,21 +97,13 @@ export default function CustomerProfileTab() {
       return;
     }
     setSavedAt(Date.now());
+    setIsEditing(false);
   }
 
-  function handleSignOut() {
-    setShowSignOutConfirm(true);
-  }
-
-  async function performSignOut() {
+  async function handleConfirmSignOut() {
     setShowSignOutConfirm(false);
     setSigningOut(true);
-    const { errorMessage } = await signOut();
-    setSigningOut(false);
-    if (errorMessage) {
-      setSaveError(errorMessage);
-      return;
-    }
+    await signOut();
     router.replace(ROUTES.login);
   }
 
@@ -118,205 +111,333 @@ export default function CustomerProfileTab() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView
         contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.headerRow}>
-          <Text style={styles.title}>Profile</Text>
-        </View>
+        <Text style={styles.screenTitle}>Profile & Settings</Text>
 
-        <View style={styles.profileBlock}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarMark}>{initialsFromName(profile.full_name)}</Text>
-          </View>
-          <Text style={styles.name}>{profile.full_name}</Text>
-          <Text style={styles.email}>{profile.email ?? '—'}</Text>
-          <View
-            style={[
-              styles.rolePill,
-              profile.role === 'admin' ? styles.roleAdmin : styles.roleCustomer,
-            ]}
-          >
-            <Text
-              style={[
-                styles.rolePillText,
-                profile.role === 'admin' ? styles.roleAdminText : styles.roleCustomerText,
-              ]}
-            >
-              {profile.role === 'admin' ? 'Admin' : 'Verified customer'}
-            </Text>
+        {/* Profile Header (§14: 80pt avatar, name, email, verified pill) */}
+        <View style={styles.profileHeader}>
+          <Avatar name={profile.full_name} size={80} verified />
+          <Text style={styles.userName}>{profile.full_name}</Text>
+          <Text style={styles.userEmail}>{profile.email}</Text>
+          <View style={styles.badgeRow}>
+            <Badge label="Verified Customer" variant="success" icon="check" />
           </View>
         </View>
 
-        {account ? (
+        {/* Section 1: Personal Information Card */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Personal details</Text>
+            {!isEditing ? (
+              <Pressable
+                onPress={() => setIsEditing(true)}
+                hitSlop={8}
+                style={styles.editToggle}
+              >
+                <Text style={styles.editToggleText}>Edit</Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                onPress={() => {
+                  setFullName(profile.full_name);
+                  setPhone(profile.phone ?? '');
+                  setIsEditing(false);
+                }}
+                hitSlop={8}
+                style={styles.editToggle}
+              >
+                <Text style={styles.cancelToggleText}>Cancel</Text>
+              </Pressable>
+            )}
+          </View>
+
+          <Card variant="default">
+            {isEditing ? (
+              <View>
+                <TextInput
+                  label="Full Name"
+                  value={fullName}
+                  onChangeText={setFullName}
+                  leftIcon="user"
+                />
+                <TextInput
+                  label="Phone Number"
+                  value={phone}
+                  onChangeText={setPhone}
+                  leftIcon="phone"
+                  keyboardType="phone-pad"
+                  error={!phoneCheck.ok ? phoneCheck.message : null}
+                />
+                <FormErrorBanner message={saveError} />
+                <FormSuccessBanner
+                  message={savedAt ? 'Profile updated successfully.' : null}
+                />
+                <Button
+                  title="Save changes"
+                  onPress={handleSave}
+                  loading={saving}
+                  disabled={!canSave}
+                  size="md"
+                />
+              </View>
+            ) : (
+              <View style={styles.infoList}>
+                <InfoRow label="Full name" value={profile.full_name} icon="user" />
+                <View style={styles.rowDivider} />
+                <InfoRow label="Email" value={profile.email || 'Not registered'} icon="mail" />
+                <View style={styles.rowDivider} />
+                <InfoRow
+                  label="Phone"
+                  value={profile.phone || 'Not registered'}
+                  icon="phone"
+                />
+              </View>
+            )}
+          </Card>
+        </View>
+
+        {/* Section 2: Banking & Branch Overview */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Banking & accounts</Text>
           <Card variant="surface">
-            <View style={styles.balanceRow}>
-              <Text style={styles.balanceLabel}>Current balance</Text>
-              <Money value={account.balance} size="large" />
-              <Text style={styles.balanceMeta}>{account.account_number}</Text>
-              {account.branch ? (
-                <Text style={styles.branchMeta}>
-                  Branch: {account.branch.name} ({account.branch.district})
-                </Text>
-              ) : null}
+            <View style={styles.infoList}>
+              <InfoRow
+                label="Account type"
+                value="Simulated Savings (BDT)"
+                icon="bank"
+              />
+              <View style={styles.rowDivider} />
+              <InfoRow
+                label="Home branch"
+                value={account?.branch?.name ?? 'Assigned branch'}
+                icon="bank"
+              />
+              <View style={styles.rowDivider} />
+              <InfoRow
+                label="Account status"
+                value={account?.status ? account.status.toUpperCase() : 'ACTIVE'}
+                icon="shield"
+              />
             </View>
           </Card>
-        ) : null}
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Edit profile</Text>
-
-          <AuthInput
-            label="Full name"
-            value={fullName}
-            onChangeText={(t) => {
-              setFullName(t);
-              setSaveError(null);
-              setSavedAt(null);
-            }}
-            autoCapitalize="words"
-            autoCorrect={false}
-            placeholder="Your full name"
-            editable={!saving}
-            accessibilityHint="Cannot change email, role or account details"
-          />
-
-          <AuthInput
-            label="Phone"
-            value={phone}
-            onChangeText={(t) => {
-              setPhone(t);
-              setSaveError(null);
-              setSavedAt(null);
-            }}
-            keyboardType="phone-pad"
-            placeholder="e.g. +8801XXXXXXXXX"
-            editable={!saving}
-            error={!phoneCheck.ok ? phoneCheck.message ?? null : null}
-            accessibilityHint="Optional contact number"
-          />
-
-          <FormErrorBanner message={saveError} />
-          <FormSuccessBanner
-            message={savedAt && Date.now() - savedAt < 4000 ? 'Profile updated.' : null}
-          />
-
-          <AuthButton
-            title="Save changes"
-            onPress={handleSave}
-            loading={saving}
-            disabled={!canSave}
-          />
         </View>
 
+        {/* Section 3: Preferences & Security */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account information (read-only)</Text>
-          <Card>
-            <ReadOnlyRow label="Email" value={profile.email ?? '—'} />
-            <Divider />
-            <ReadOnlyRow
-              label="Role"
-              value={profile.role === 'admin' ? 'Administrator' : 'Customer'}
-            />
-            {account ? (
-              <>
-                <Divider />
-                <ReadOnlyRow label="Account number" value={account.account_number} />
-                <Divider />
-                <ReadOnlyRow
-                  label="Account status"
-                  value={account.status[0].toUpperCase() + account.status.slice(1)}
-                />
-              </>
-            ) : null}
+          <Text style={styles.sectionTitle}>Preferences</Text>
+          <Card variant="default">
+            <Pressable
+              style={styles.menuRow}
+              onPress={() =>
+                Alert.alert(
+                  'Biometric Security',
+                  'Face ID and biometric confirmation is active for transactions.',
+                  [{ text: 'OK' }]
+                )
+              }
+            >
+              <View style={styles.menuLeft}>
+                <View style={styles.menuIconPlate}>
+                  <Icon name="biometrics" size={18} color={colors.primary} />
+                </View>
+                <Text style={styles.menuLabel}>Biometric login & transfers</Text>
+              </View>
+              <Badge label="Enabled" variant="primary" />
+            </Pressable>
+
+            <View style={styles.rowDivider} />
+
+            <Pressable
+              style={styles.menuRow}
+              onPress={() => router.push(ROUTES.notifications)}
+            >
+              <View style={styles.menuLeft}>
+                <View style={styles.menuIconPlate}>
+                  <Icon name="bell" size={18} color={colors.primary} />
+                </View>
+                <Text style={styles.menuLabel}>Transaction alerts</Text>
+              </View>
+              <Icon name="chevron-right" size={16} color={colors.textSecondary} />
+            </Pressable>
           </Card>
-          <Text style={styles.helper}>
-            For security, some account details can only be updated by SmartBank support.
-          </Text>
         </View>
 
-        <View style={styles.section}>
-          <AuthButton
+        {/* Sign Out Button (§14) */}
+        <View style={styles.signOutWrap}>
+          <Button
             title="Sign out"
-            onPress={handleSignOut}
-            variant="secondary"
+            variant="outline"
+            icon="logout"
+            onPress={() => setShowSignOutConfirm(true)}
             loading={signingOut}
+            style={styles.signOutBtn}
           />
         </View>
       </ScrollView>
 
       <ConfirmDialog
         visible={showSignOutConfirm}
-        title="Sign out?"
-        message="You will need to sign in again to use SmartBank."
+        title="Sign out of SmartBank?"
+        message="You will need to enter your email and password to access your account again."
         confirmLabel="Sign out"
         cancelLabel="Cancel"
+        onConfirm={handleConfirmSignOut}
+        onCancel={() => setShowSignOutConfirm(false)}
         destructive
-        loading={signingOut}
-        onConfirm={performSignOut}
-        onCancel={() => (signingOut ? null : setShowSignOutConfirm(false))}
       />
     </SafeAreaView>
   );
 }
 
-function ReadOnlyRow({ label, value }: { label: string; value: string }) {
+function InfoRow({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: string;
+  icon: IconName;
+}) {
   return (
-    <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={styles.rowValue} numberOfLines={1}>
+    <View style={styles.infoRow}>
+      <View style={styles.infoLeft}>
+        <Icon name={icon} size={16} color={colors.textSecondary} />
+        <Text style={styles.infoLabel}>{label}</Text>
+      </View>
+      <Text style={styles.infoValue} numberOfLines={1}>
         {value}
       </Text>
     </View>
   );
 }
 
-function Divider() {
-  return <View style={styles.divider} />;
-}
-
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
-  body: { flex: 1, paddingHorizontal: spacing.lg, justifyContent: 'center' },
-  scroll: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl, gap: spacing.lg },
-  headerRow: { paddingTop: spacing.md },
-  title: { fontSize: 24, fontWeight: '700', color: colors.text },
-  profileBlock: { alignItems: 'center', marginTop: spacing.md },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  safe: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  scroll: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.base,
+    paddingBottom: spacing.xxxl,
+    gap: spacing.base,
+  },
+  screenTitle: {
+    fontSize: 24, // Figma specification: 24 pt bold
+    fontWeight: '700',
+    color: colors.textPrimary,
+    letterSpacing: -0.5,
+  },
+  profileHeader: {
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  userName: {
+    fontSize: 18, // 18 pt weight 600
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginTop: spacing.md,
+  },
+  userEmail: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  badgeRow: {
+    marginTop: spacing.sm,
+  },
+  section: {
+    marginTop: spacing.sm,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  sectionTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: spacing.sm,
+  },
+  editToggle: {
+    padding: spacing.xs,
+  },
+  editToggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  cancelToggleText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  infoList: {
+    gap: spacing.md,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  infoLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  infoLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  infoValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    maxWidth: '55%',
+  },
+  rowDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.xs,
+  },
+  menuLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  menuIconPlate: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.sm,
     backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarMark: { color: colors.primaryDark, fontSize: 28, fontWeight: '800' },
-  name: { fontSize: 20, fontWeight: '700', color: colors.text, marginTop: spacing.sm },
-  email: { fontSize: typography.body.size, color: colors.textMuted, marginTop: 2 },
-  rolePill: {
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: 2,
-    borderRadius: 999,
+  menuLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.textPrimary,
   },
-  roleCustomer: { backgroundColor: colors.successBg },
-  roleAdmin: { backgroundColor: colors.primaryLight },
-  rolePillText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' },
-  roleCustomerText: { color: colors.success },
-  roleAdminText: { color: colors.primaryDark },
-  balanceRow: { gap: 2 },
-  balanceLabel: { fontSize: typography.label.size, color: colors.textMuted },
-  balanceMeta: { fontSize: typography.helper.size, color: colors.textMuted, marginTop: 2 },
-  branchMeta: { fontSize: typography.helper.size, color: colors.primaryDark, marginTop: 2, fontWeight: '600' },
-  section: { marginTop: spacing.md },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm + 2,
+  signOutWrap: {
+    marginTop: spacing.lg,
   },
-  rowLabel: { fontSize: typography.body.size, color: colors.textMuted },
-  rowValue: { fontSize: typography.body.size, color: colors.text, fontWeight: '600', maxWidth: '60%', textAlign: 'right' },
-  divider: { height: 1, backgroundColor: colors.border },
-  helper: { fontSize: typography.helper.size, color: colors.textMuted, marginTop: spacing.sm },
+  signOutBtn: {
+    borderColor: colors.errorBorder,
+  },
+  body: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+  },
 });

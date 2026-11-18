@@ -1,26 +1,34 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Icon } from '../../../components/ui/Icon';
 import { colors } from '../../../constants/colors';
-import { spacing, typography } from '../../../constants/layout';
+import { radius, spacing } from '../../../constants/layout';
 import { useNotifications } from '../../../hooks/useNotifications';
 
 /**
- * Bottom tab bar for the customer app:
- *   Home · Transactions · Notifications · Profile
- * Per plan §23. Notifications shows a count badge when unread > 0.
+ * Bottom tab bar for the customer application. Matches Figma §34.
+ * Home · Transactions · Notifications · Profile
+ * Notifications tab displays unread alert badge.
  */
 export default function CustomerTabsLayout() {
   const { unreadCount } = useNotifications();
+  const insets = useSafeAreaInsets();
+  const bottomInset = Math.max(insets.bottom, 12);
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
+        tabBarInactiveTintColor: colors.textSecondary,
         tabBarLabelStyle: styles.label,
-        tabBarStyle: styles.bar,
+        tabBarStyle: {
+          ...styles.bar,
+          height: 58 + bottomInset,
+          paddingBottom: Math.max(bottomInset, 8),
+        },
         tabBarItemStyle: styles.item,
       }}
     >
@@ -28,14 +36,14 @@ export default function CustomerTabsLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <Glyph color={String(color)}>⌂</Glyph>,
+          tabBarIcon: ({ color }) => <Icon name="bank" size={20} color={color} />,
         }}
       />
       <Tabs.Screen
         name="transactions"
         options={{
           title: 'Transactions',
-          tabBarIcon: ({ color }) => <Glyph color={String(color)}>≡</Glyph>,
+          tabBarIcon: ({ color }) => <Icon name="history" size={20} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -43,8 +51,8 @@ export default function CustomerTabsLayout() {
         options={{
           title: 'Alerts',
           tabBarIcon: ({ color }) => (
-            <View>
-              <Glyph color={String(color)}>◉</Glyph>
+            <View style={styles.iconWrap}>
+              <Icon name="bell" size={20} color={color} />
               {unreadCount > 0 ? (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
@@ -58,25 +66,19 @@ export default function CustomerTabsLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color }) => <Glyph color={String(color)}>◐</Glyph>,
+          tabBarIcon: ({ color }) => <Icon name="user" size={20} color={color} />,
         }}
       />
     </Tabs>
   );
 }
 
-function Glyph({ color, children }: { color: string; children: React.ReactNode }) {
-  return <Text style={[styles.glyph, { color }]}>{children}</Text>;
-}
-
 const styles = StyleSheet.create({
   bar: {
-    height: 64,
-    paddingTop: 6,
-    paddingBottom: 8,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     backgroundColor: colors.background,
+    paddingTop: 6,
   },
   item: {
     paddingTop: 4,
@@ -86,17 +88,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 2,
   },
-  glyph: {
-    fontSize: 22,
-    fontWeight: '700',
+  iconWrap: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   badge: {
     position: 'absolute',
     top: -4,
-    right: -10,
+    right: -8,
     minWidth: 16,
     height: 16,
-    borderRadius: 8,
+    borderRadius: radius.pill,
     paddingHorizontal: 4,
     backgroundColor: colors.error,
     alignItems: 'center',

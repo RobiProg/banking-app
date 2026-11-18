@@ -6,16 +6,19 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Badge } from '../../../components/ui/Badge';
+import { Button } from '../../../components/ui/Button';
+import { Card } from '../../../components/ui/Card';
+import { Icon } from '../../../components/ui/Icon';
+import { TextInput } from '../../../components/ui/TextInput';
 import { colors } from '../../../constants/colors';
-import { spacing, typography } from '../../../constants/layout';
+import { radius, shadows, spacing, typography } from '../../../constants/layout';
 import { LoadingState } from '../../../components/common/LoadingState';
 import { ErrorState } from '../../../components/common/ErrorState';
 import { EmptyState } from '../../../components/common/EmptyState';
-import { AuthInput } from '../../../components/auth/AuthInput';
 import {
   createBranch,
   listAllBranches,
@@ -27,10 +30,8 @@ import type { Branch } from '../../../types/db';
 type StatusFilter = 'all' | 'active' | 'inactive';
 
 /**
- * Branch Management Tab (SRS v2.1 FR-ADM-06, FR-BR-01, FR-BR-02).
- * - Lists all bank branches with active/inactive status.
- * - Toggle branch status dynamically.
- * - Modal form to create new branch with routing code and district.
+ * Branch Management Tab (SRS v2.2 FR-ADM-06, FR-BR-01, FR-BR-02).
+ * Styled to match SmartBank Figma UI design system.
  */
 export default function AdminBranchesTab() {
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -132,29 +133,28 @@ export default function AdminBranchesTab() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.headerRow}>
-        <View>
-          <Text style={styles.title}>Branches</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>Branch Network</Text>
           <Text style={styles.subtitle}>
-            {loading ? 'Loading…' : `${branches.length} registered branches across Bangladesh`}
+            {loading ? 'Loading…' : `${branches.length} registered branches in Bangladesh`}
           </Text>
         </View>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Add Branch"
+        <Button
+          title="Add Branch"
+          variant="primary"
+          size="sm"
+          icon="plus"
           onPress={() => setShowAddModal(true)}
-          style={({ pressed }) => [styles.addBtn, pressed && styles.pressed]}
-        >
-          <Text style={styles.addBtnText}>+ Add Branch</Text>
-        </Pressable>
+        />
       </View>
 
       <View style={styles.filterSection}>
         <View style={styles.searchWrap}>
-          <AuthInput
-            label=""
+          <TextInput
             value={search}
             onChangeText={setSearch}
             placeholder="Search by branch name, district, or code"
+            leftIcon="search"
             autoCapitalize="none"
             autoCorrect={false}
             containerStyle={{ marginBottom: 0 }}
@@ -216,29 +216,18 @@ export default function AdminBranchesTab() {
           keyExtractor={(b) => b.id}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => (
-            <View style={styles.card}>
+            <Card variant="surface" style={styles.card}>
               <View style={styles.cardHeader}>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, gap: 2 }}>
                   <Text style={styles.branchName}>{item.name}</Text>
                   <Text style={styles.branchDistrict}>
-                    📍 {item.district} District • Code: {item.branch_code}
+                    {item.district} District • Code: {item.branch_code}
                   </Text>
                 </View>
-                <View
-                  style={[
-                    styles.statusBadge,
-                    item.is_active ? styles.statusActive : styles.statusInactive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.statusBadgeText,
-                      item.is_active ? styles.statusActiveText : styles.statusInactiveText,
-                    ]}
-                  >
-                    {item.is_active ? 'ACTIVE' : 'INACTIVE'}
-                  </Text>
-                </View>
+                <Badge
+                  label={item.is_active ? 'ACTIVE' : 'INACTIVE'}
+                  variant={item.is_active ? 'success' : 'neutral'}
+                />
               </View>
 
               {item.routing_code ? (
@@ -252,33 +241,21 @@ export default function AdminBranchesTab() {
               ) : null}
 
               <View style={styles.cardActions}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={item.is_active ? 'Deactivate branch' : 'Activate branch'}
-                  disabled={togglingId === item.id}
-                  onPress={() => handleToggleStatus(item)}
-                  style={({ pressed }) => [
-                    styles.toggleBtn,
-                    item.is_active ? styles.toggleDeactivate : styles.toggleActivate,
-                    pressed && styles.pressed,
-                    togglingId === item.id && styles.disabled,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.toggleBtnText,
-                      item.is_active ? styles.toggleDeactivateText : styles.toggleActivateText,
-                    ]}
-                  >
-                    {togglingId === item.id
+                <Button
+                  title={
+                    togglingId === item.id
                       ? 'Updating…'
                       : item.is_active
                       ? 'Deactivate'
-                      : 'Activate'}
-                  </Text>
-                </Pressable>
+                      : 'Activate'
+                  }
+                  variant={item.is_active ? 'outline' : 'primary'}
+                  size="sm"
+                  disabled={togglingId === item.id}
+                  onPress={() => handleToggleStatus(item)}
+                />
               </View>
-            </View>
+            </Card>
           )}
         />
       )}
@@ -303,96 +280,76 @@ export default function AdminBranchesTab() {
                 disabled={submitting}
                 style={styles.closeBtn}
               >
-                <Text style={styles.closeText}>✕</Text>
+                <Icon name="close" size={18} color={colors.textSecondary} />
               </Pressable>
             </View>
 
-            <ScrollView contentContainerStyle={{ paddingBottom: spacing.md }}>
+            <ScrollView contentContainerStyle={{ paddingBottom: spacing.base }} showsVerticalScrollIndicator={false}>
               <Text style={styles.formHint}>
                 Add a new designated branch location for customer accounts and branch cash deposits.
               </Text>
 
               {formError ? <Text style={styles.modalError}>{formError}</Text> : null}
 
-              <Text style={styles.inputLabel}>Branch Name *</Text>
               <TextInput
-                style={styles.modalInput}
+                label="Branch Name *"
                 value={formName}
                 onChangeText={setFormName}
                 placeholder="e.g. Dhanmondi Branch"
-                placeholderTextColor={colors.textMuted}
                 editable={!submitting}
               />
 
-              <Text style={styles.inputLabel}>Branch Code * (e.g. SB-DHK-003)</Text>
               <TextInput
-                style={styles.modalInput}
+                label="Branch Code * (e.g. SB-DHK-003)"
                 value={formCode}
                 onChangeText={(t) => setFormCode(t.toUpperCase())}
                 placeholder="e.g. SB-DHK-003"
-                placeholderTextColor={colors.textMuted}
                 autoCapitalize="characters"
                 editable={!submitting}
               />
 
-              <Text style={styles.inputLabel}>District * (e.g. Dhaka, Chittagong, Sylhet)</Text>
               <TextInput
-                style={styles.modalInput}
+                label="District * (e.g. Dhaka, Chittagong, Sylhet)"
                 value={formDistrict}
                 onChangeText={setFormDistrict}
                 placeholder="e.g. Dhaka"
-                placeholderTextColor={colors.textMuted}
                 editable={!submitting}
               />
 
-              <Text style={styles.inputLabel}>Routing Code (Optional)</Text>
               <TextInput
-                style={styles.modalInput}
+                label="Routing Code (Optional)"
                 value={formRouting}
                 onChangeText={setFormRouting}
                 placeholder="e.g. 01026003"
-                placeholderTextColor={colors.textMuted}
                 keyboardType="numeric"
                 editable={!submitting}
               />
 
-              <Text style={styles.inputLabel}>Physical Address (Optional)</Text>
               <TextInput
-                style={[styles.modalInput, { minHeight: 60 }]}
+                label="Physical Address (Optional)"
                 value={formAddress}
                 onChangeText={setFormAddress}
                 placeholder="e.g. House 14, Road 8, Dhanmondi, Dhaka"
-                placeholderTextColor={colors.textMuted}
                 multiline
+                numberOfLines={2}
                 editable={!submitting}
               />
 
               <View style={styles.modalButtons}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Cancel"
+                <Button
+                  title="Cancel"
+                  variant="outline"
                   onPress={() => setShowAddModal(false)}
                   disabled={submitting}
-                  style={({ pressed }) => [styles.cancelBtn, pressed && styles.pressed]}
-                >
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
-                </Pressable>
-
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Save Branch"
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  title="Create Branch"
+                  variant="primary"
+                  loading={submitting}
                   onPress={handleCreateBranch}
-                  disabled={submitting}
-                  style={({ pressed }) => [
-                    styles.saveBtn,
-                    pressed && styles.pressed,
-                    submitting && styles.disabled,
-                  ]}
-                >
-                  <Text style={styles.saveBtnText}>
-                    {submitting ? 'Creating…' : 'Create Branch'}
-                  </Text>
-                </Pressable>
+                  style={{ flex: 1 }}
+                />
               </View>
             </ScrollView>
           </View>
@@ -403,183 +360,162 @@ export default function AdminBranchesTab() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
-  body: { flex: 1, paddingHorizontal: spacing.lg, justifyContent: 'center' },
-  headerRow: {
+  safe: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  body: {
+    flex: 1,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
+    justifyContent: 'center',
+  },
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.base,
+    paddingBottom: spacing.sm,
+    gap: spacing.md,
   },
-  title: { fontSize: 24, fontWeight: '700', color: colors.text },
-  subtitle: { fontSize: typography.helper.size, color: colors.textMuted, marginTop: 2 },
-  addBtn: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 4,
-    borderRadius: 8,
+  title: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.textPrimary,
   },
-  addBtnText: { color: colors.textOnPrimary, fontSize: 13, fontWeight: '700' },
-  filterSection: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
-  searchWrap: { marginBottom: spacing.xs },
-  chipsRow: { flexDirection: 'row', gap: spacing.sm, marginTop: 4 },
+  subtitle: {
+    fontSize: typography.caption.size,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  filterSection: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+    gap: spacing.sm,
+  },
+  searchWrap: {
+    marginBottom: 0,
+  },
+  chipsRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
   chip: {
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
-    borderRadius: 999,
+    borderRadius: radius.pill,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { fontSize: typography.caption.size, fontWeight: '600', color: colors.textMuted },
-  chipTextActive: { color: colors.textOnPrimary },
-  pressed: { opacity: 0.8 },
-  disabled: { opacity: 0.5 },
-  list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
+  chipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  chipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  chipTextActive: {
+    color: colors.textOnPrimary,
+  },
+  pressed: {
+    opacity: 0.85,
+  },
+  list: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xxl,
+    gap: spacing.md,
+  },
   card: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: spacing.md,
-    marginBottom: spacing.md,
+    padding: spacing.base,
+    gap: spacing.sm,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: spacing.xs,
+    gap: spacing.sm,
   },
-  branchName: { fontSize: 16, fontWeight: '700', color: colors.text },
-  branchDistrict: { fontSize: typography.caption.size, color: colors.textMuted, marginTop: 2 },
-  statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
-  statusActive: { backgroundColor: colors.successBg },
-  statusInactive: { backgroundColor: colors.border },
-  statusBadgeText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.4 },
-  statusActiveText: { color: colors.success },
-  statusInactiveText: { color: colors.textMuted },
-  cardDetail: { fontSize: typography.caption.size, color: colors.textMuted, marginTop: 4 },
-  codeText: { fontWeight: '700', color: colors.text },
-  cardAddress: { fontSize: typography.caption.size, color: colors.textMuted, marginTop: 4 },
+  branchName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  branchDistrict: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  cardDetail: {
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  codeText: {
+    color: colors.primaryDark,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+  },
+  cardAddress: {
+    fontSize: 12,
+    color: colors.textTertiary,
+    lineHeight: 16,
+  },
   cardActions: {
-    marginTop: spacing.md,
+    marginTop: spacing.xs,
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: spacing.sm,
   },
-  toggleBtn: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  toggleBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  toggleActivate: {
-    backgroundColor: colors.successBg,
-    borderColor: colors.success,
-  },
-  toggleActivateText: {
-    color: colors.success,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  toggleDeactivate: {
-    backgroundColor: colors.errorBg,
-    borderColor: colors.error,
-  },
-  toggleDeactivateText: {
-    color: colors.error,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.lg,
+    backgroundColor: 'rgba(11, 27, 43, 0.45)',
+    justifyContent: 'flex-end',
   },
   modalContent: {
-    width: '100%',
-    maxHeight: '90%',
     backgroundColor: colors.background,
-    borderRadius: 16,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
     padding: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
+    maxHeight: '88%',
+    gap: spacing.md,
+    ...shadows.lg,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.xs,
+    paddingBottom: spacing.xs,
   },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: colors.text },
-  closeBtn: { padding: spacing.xs },
-  closeText: { fontSize: 18, fontWeight: '700', color: colors.textMuted },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   formHint: {
-    fontSize: typography.caption.size,
-    color: colors.textMuted,
+    fontSize: 13,
+    color: colors.textSecondary,
     marginBottom: spacing.md,
+    lineHeight: 18,
   },
   modalError: {
+    fontSize: 13,
     color: colors.error,
-    fontSize: typography.caption.size,
-    marginBottom: spacing.sm,
     backgroundColor: colors.errorBg,
-    padding: spacing.xs + 2,
-    borderRadius: 6,
-  },
-  inputLabel: {
-    fontSize: typography.label.size,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 4,
-    marginTop: spacing.sm,
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: typography.body.size,
-    color: colors.text,
-    backgroundColor: colors.surface,
+    padding: spacing.sm,
+    borderRadius: radius.sm,
+    marginBottom: spacing.md,
   },
   modalButtons: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing.sm,
-    marginTop: spacing.lg,
-  },
-  cancelBtn: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  cancelBtnText: { fontSize: typography.body.size, fontWeight: '600', color: colors.text },
-  saveBtn: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: 8,
-    backgroundColor: colors.primary,
-  },
-  saveBtnText: {
-    fontSize: typography.body.size,
-    fontWeight: '700',
-    color: colors.textOnPrimary,
+    gap: spacing.md,
+    marginTop: spacing.base,
   },
 });

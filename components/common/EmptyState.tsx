@@ -1,37 +1,48 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { Button } from '../ui/Button';
+import { Icon, IconName } from '../ui/Icon';
 import { colors } from '../../constants/colors';
-import { spacing, typography } from '../../constants/layout';
+import { radius, spacing } from '../../constants/layout';
 
 type EmptyStateProps = {
   title: string;
   message?: string;
+  icon?: IconName;
   ctaLabel?: string;
   onPressCta?: () => void;
 };
 
 /**
- * Centered empty state used on list screens (transactions,
- * notifications, beneficiaries, etc.). Matches the empty-state recipe
- * in DESIGN_PROMPT §31.
+ * Centered empty state matching Figma §31.
+ * 72pt circle with primary tint, 20pt bold H2 title, 14pt secondary text, and primary CTA.
  */
-export function EmptyState({ title, message, ctaLabel, onPressCta }: EmptyStateProps) {
+export function EmptyState({
+  title,
+  message,
+  icon = 'wallet',
+  ctaLabel,
+  onPressCta,
+}: EmptyStateProps) {
   return (
     <View style={styles.container} accessibilityRole="text">
-      <View style={styles.iconPlate}>
-        <Text style={styles.iconMark}>—</Text>
+      <View style={styles.iconCircle}>
+        <Icon name={icon} size={36} color={colors.primary} />
       </View>
+
       <Text style={styles.title}>{title}</Text>
       {message ? <Text style={styles.message}>{message}</Text> : null}
+
       {ctaLabel && onPressCta ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={ctaLabel}
-          onPress={onPressCta}
-          style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
-        >
-          <Text style={styles.ctaLabel}>{ctaLabel}</Text>
-        </Pressable>
+        <View style={styles.ctaWrapper}>
+          <Button
+            title={ctaLabel}
+            onPress={onPressCta}
+            variant="primary"
+            size="md"
+            fullWidth={false}
+          />
+        </View>
       ) : null}
     </View>
   );
@@ -41,50 +52,35 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xxl,
   },
-  iconPlate: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+  iconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.md,
-  },
-  iconMark: {
-    fontSize: 40,
-    color: colors.primary,
-    fontWeight: '700',
+    marginBottom: spacing.base,
+    borderWidth: 1,
+    borderColor: 'rgba(10, 107, 211, 0.12)',
   },
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: colors.text,
+    color: colors.textPrimary,
     textAlign: 'center',
-    marginBottom: spacing.xs + 2,
+    marginBottom: spacing.xs,
   },
   message: {
-    fontSize: typography.body.size,
-    color: colors.textMuted,
+    fontSize: 14,
+    color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: typography.body.size * 1.4,
-    marginBottom: spacing.md,
+    lineHeight: 20,
+    maxWidth: 280,
   },
-  cta: {
-    marginTop: spacing.sm,
-    backgroundColor: colors.primary,
-    borderRadius: 10,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm + 4,
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  ctaPressed: { opacity: 0.85 },
-  ctaLabel: {
-    color: colors.textOnPrimary,
-    fontSize: typography.body.size,
-    fontWeight: '600',
+  ctaWrapper: {
+    marginTop: spacing.lg,
   },
 });

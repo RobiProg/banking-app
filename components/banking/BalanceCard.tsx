@@ -1,8 +1,9 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Icon } from '../ui/Icon';
 import { colors } from '../../constants/colors';
-import { spacing, typography } from '../../constants/layout';
+import { radius, spacing } from '../../constants/layout';
 import { ROUTES } from '../../constants/routes';
 import type { Account } from '../../types/db';
 import { formatBDT } from '../../utils/format';
@@ -16,8 +17,9 @@ type Props = {
 };
 
 /**
- * Gradient hero balance card. Matches DESIGN_PROMPT §5 / §7.
- * Tapping anywhere on the card navigates to the account details.
+ * Hero Balance Card. Matches Figma §5 & §7.
+ * Primary gradient feel (#0A6BD3 to #0856A8), 20pt radius,
+ * eye visibility toggle, and pill action button for account details.
  */
 export function BalanceCard({ account, hidden = false, onToggleHide }: Props) {
   const router = useRouter();
@@ -27,57 +29,72 @@ export function BalanceCard({ account, hidden = false, onToggleHide }: Props) {
 
   return (
     <View style={styles.card}>
+      {/* Top Header Row */}
       <View style={styles.rowTop}>
-        <Text style={styles.label}>Available balance</Text>
+        <View style={styles.labelGroup}>
+          <Text style={styles.label}>Total balance</Text>
+          <View style={styles.statusDotRow}>
+            <View
+              style={[
+                styles.statusDot,
+                isBlocked
+                  ? styles.dotBlocked
+                  : isInactive
+                  ? styles.dotInactive
+                  : styles.dotActive,
+              ]}
+            />
+            <Text style={styles.statusText}>
+              {isBlocked ? 'Blocked' : isInactive ? 'Inactive' : 'Active Account'}
+            </Text>
+          </View>
+        </View>
+
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={hidden ? 'Show balance' : 'Hide balance'}
           accessibilityState={{ selected: hidden }}
           onPress={() => onToggleHide?.()}
-          hitSlop={8}
+          hitSlop={10}
           style={styles.eyeBtn}
         >
-          <Text style={styles.eye}>{hidden ? '◉' : '◎'}</Text>
+          <Icon
+            name={hidden ? 'eye-off' : 'eye'}
+            size={20}
+            color={colors.textOnPrimary}
+          />
         </Pressable>
       </View>
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Available balance ${formatBDT(account?.balance)}, account ${account?.account_number}`}
-        onPress={() => router.push(ROUTES.account)}
-        style={({ pressed }) => [styles.cardBody, pressed && styles.pressed]}
-      >
-        <View style={styles.balanceRow}>
-          {hidden ? (
-            <Text style={styles.masked}>৳ ••••••</Text>
-          ) : (
-            <Money value={account?.balance ?? 0} size="xl" color={colors.textOnPrimary} />
-          )}
+      {/* Balance Center Amount */}
+      <View style={styles.balanceSection}>
+        {hidden ? (
+          <Text style={styles.masked}>৳ ••••••</Text>
+        ) : (
+          <Money value={account?.balance ?? 0} size="xl" color={colors.textOnPrimary} />
+        )}
+      </View>
+
+      {/* Bottom Row */}
+      <View style={styles.rowBottom}>
+        <View style={styles.accountInfo}>
+          <Text style={styles.accountLabel}>Smart Savings</Text>
+          <Text style={styles.accountNumber} numberOfLines={1}>
+            •••• {account?.account_number ? account.account_number.slice(-4) : '••••'}
+            {account?.branch?.name ? ` • ${account.branch.name}` : ''}
+          </Text>
         </View>
 
-        <View style={styles.rowBottom}>
-          <View>
-            <Text style={styles.accountLabel}>Savings account</Text>
-            <Text style={styles.accountNumber} numberOfLines={1}>
-              {account?.account_number ?? '—'}
-              {account?.branch?.name ? ` • ${account.branch.name}` : ''}
-            </Text>
-          </View>
-          {isBlocked ? (
-            <View style={[styles.badge, styles.badgeBlocked]}>
-              <Text style={[styles.badgeText, styles.badgeTextBlocked]}>Blocked</Text>
-            </View>
-          ) : isInactive ? (
-            <View style={[styles.badge, styles.badgeInactive]}>
-              <Text style={[styles.badgeText, styles.badgeTextInactive]}>Inactive</Text>
-            </View>
-          ) : (
-            <View style={[styles.badge, styles.badgeActive]}>
-              <Text style={[styles.badgeText, styles.badgeTextActive]}>Active</Text>
-            </View>
-          )}
-        </View>
-      </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Manage accounts"
+          onPress={() => router.push(ROUTES.account)}
+          style={({ pressed }) => [styles.pillButton, pressed && styles.pillPressed]}
+        >
+          <Text style={styles.pillText}>Details</Text>
+          <Icon name="chevron-right" size={14} color={colors.textOnPrimary} />
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -85,27 +102,25 @@ export function BalanceCard({ account, hidden = false, onToggleHide }: Props) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.primary,
-    borderRadius: 20,
+    borderRadius: radius.xl, // 20pt
     padding: spacing.lg,
-    minHeight: 180,
+    minHeight: 184,
     justifyContent: 'space-between',
-    // Soft elevation
     shadowColor: colors.primaryDark,
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.28,
     shadowOffset: { width: 0, height: 8 },
     shadowRadius: 16,
     elevation: 6,
   },
-  cardBody: {
-    flex: 1,
-    justifyContent: 'space-between',
-    paddingTop: spacing.xs,
-  },
-  pressed: { opacity: 0.96 },
   rowTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  labelGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   label: {
     color: colors.textOnPrimary,
@@ -114,24 +129,42 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.3,
   },
+  statusDotRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 4,
+  },
+  dotActive: { backgroundColor: '#4ADE80' },
+  dotInactive: { backgroundColor: '#FBBF24' },
+  dotBlocked: { backgroundColor: '#F87171' },
+  statusText: {
+    color: colors.textOnPrimary,
+    fontSize: 11,
+    fontWeight: '600',
+  },
   eyeBtn: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  eye: {
-    color: colors.textOnPrimary,
-    opacity: 0.9,
-    fontSize: 18,
-  },
-  balanceRow: {
-    marginTop: spacing.sm,
-    marginBottom: spacing.sm,
+  balanceSection: {
+    marginVertical: spacing.md,
   },
   masked: {
     color: colors.textOnPrimary,
-    fontSize: 32,
+    fontSize: 34,
     fontWeight: '700',
     letterSpacing: 2,
   },
@@ -139,6 +172,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
+  },
+  accountInfo: {
+    flex: 1,
+    marginRight: spacing.sm,
   },
   accountLabel: {
     color: colors.textOnPrimary,
@@ -148,25 +185,25 @@ const styles = StyleSheet.create({
   },
   accountNumber: {
     color: colors.textOnPrimary,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     marginTop: 2,
   },
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
+  pillButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    paddingHorizontal: spacing.md,
+    height: 32,
+    borderRadius: radius.pill,
+    gap: 4,
   },
-  badgeActive: { backgroundColor: 'rgba(255,255,255,0.18)' },
-  badgeInactive: { backgroundColor: 'rgba(255,255,255,0.18)' },
-  badgeBlocked: { backgroundColor: 'rgba(255,255,255,0.18)' },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+  pillPressed: {
+    backgroundColor: 'rgba(255, 255, 255, 0.35)',
   },
-  badgeTextActive: { color: colors.textOnPrimary },
-  badgeTextInactive: { color: colors.textOnPrimary },
-  badgeTextBlocked: { color: colors.textOnPrimary },
+  pillText: {
+    color: colors.textOnPrimary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
 });

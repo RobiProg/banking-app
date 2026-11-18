@@ -2,20 +2,21 @@ import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Avatar } from '../../components/ui/Avatar';
+import { Badge } from '../../components/ui/Badge';
+import { Card } from '../../components/ui/Card';
 import { ScreenContainer } from '../../components/auth/ScreenContainer';
 import { ScreenHeader } from '../../components/common/ScreenHeader';
 import { LoadingState } from '../../components/common/LoadingState';
 import { ErrorState } from '../../components/common/ErrorState';
-import { Card } from '../../components/common/Card';
 import { Money } from '../../components/common/Money';
-import { StatusPill } from '../../components/admin/AccountRow';
 import { colors } from '../../constants/colors';
-import { spacing, typography } from '../../constants/layout';
+import { radius, spacing, typography } from '../../constants/layout';
 import { getUserById, type AdminUserRow } from '../../services/admin';
-import { initialsFromName } from '../../utils/format';
 
 /**
- * Admin user detail screen — shows full profile + their account info.
+ * Admin Customer Details Screen.
+ * Deep audit view aligned with SmartBank Figma UI tokens.
  */
 export default function AdminUserDetailsScreen() {
   const router = useRouter();
@@ -49,7 +50,7 @@ export default function AdminUserDetailsScreen() {
   if (loading) {
     return (
       <ScreenContainer scrollable={false} centered>
-        <LoadingState label="Loading user…" />
+        <LoadingState label="Loading customer details…" />
       </ScreenContainer>
     );
   }
@@ -68,27 +69,32 @@ export default function AdminUserDetailsScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="User detail" subtitle={user.email ?? '—'} />
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScreenHeader title="Customer Audit" subtitle={user.email ?? '—'} />
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Customer Avatar & Role Header */}
         <View style={styles.hero}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarMark}>{initialsFromName(user.full_name)}</Text>
-          </View>
+          <Avatar name={user.full_name} size={72} />
           <Text style={styles.name}>{user.full_name}</Text>
-          <Text style={styles.role}>{user.role === 'admin' ? 'Administrator' : 'Customer'}</Text>
+          <View style={styles.badgeRow}>
+            <Badge
+              label={user.role === 'admin' ? 'ADMINISTRATOR' : 'CUSTOMER'}
+              variant={user.role === 'admin' ? 'primary' : 'neutral'}
+            />
+          </View>
         </View>
 
+        {/* Profile Card */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Profile</Text>
-          <Card>
+          <Text style={styles.sectionTitle}>Personal Information</Text>
+          <Card variant="surface" style={styles.card}>
             <InfoRow label="Email" value={user.email ?? '—'} />
             <Divider />
-            <InfoRow label="Phone" value={user.phone ?? '—'} />
+            <InfoRow label="Phone Number" value={user.phone ?? '—'} />
             <Divider />
-            <InfoRow label="Role" value={user.role === 'admin' ? 'Administrator' : 'Customer'} />
+            <InfoRow label="Access Role" value={user.role === 'admin' ? 'Administrator / Staff' : 'Retail Customer'} />
             <Divider />
             <InfoRow
-              label="Joined"
+              label="Member Since"
               value={new Date(user.created_at).toLocaleDateString('en-GB', {
                 day: 'numeric',
                 month: 'short',
@@ -98,24 +104,34 @@ export default function AdminUserDetailsScreen() {
           </Card>
         </View>
 
+        {/* Account Card */}
         {user.account_number ? (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Account</Text>
-            <Card>
-              <InfoRow label="Account number" value={user.account_number} />
+            <Text style={styles.sectionTitle}>Bank Account</Text>
+            <Card variant="surface" style={styles.card}>
+              <InfoRow label="Account Number" value={user.account_number} mono />
               <Divider />
-              <View style={styles.statusRow}>
-                <Text style={styles.infoLabel}>Status</Text>
-                <StatusPill status={user.account_status ?? 'active'} />
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Account Status</Text>
+                <Badge
+                  label={(user.account_status ?? 'active').toUpperCase()}
+                  variant={
+                    user.account_status === 'active'
+                      ? 'success'
+                      : user.account_status === 'inactive'
+                      ? 'warning'
+                      : 'error'
+                  }
+                />
               </View>
               <Divider />
-              <View style={styles.balanceRow}>
-                <Text style={styles.infoLabel}>Balance</Text>
-                <Money value={user.balance} size="medium" />
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Current Balance</Text>
+                <Money value={user.balance} size="large" />
               </View>
             </Card>
             <Text style={styles.helper}>
-              To change status or view full balance, open the Accounts tab.
+              To modify status or post teller deposits, use the Accounts or Cash Deposit tabs.
             </Text>
           </View>
         ) : null}
@@ -124,11 +140,11 @@ export default function AdminUserDetailsScreen() {
   );
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <View style={styles.infoRow}>
       <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue} numberOfLines={1}>
+      <Text style={[styles.infoValue, mono && styles.monoText]} numberOfLines={1}>
         {value}
       </Text>
     </View>
@@ -140,42 +156,68 @@ function Divider() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
-  scroll: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl, gap: spacing.lg },
-  hero: { alignItems: 'center', paddingVertical: spacing.md },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
+  safe: {
+    flex: 1,
+    backgroundColor: colors.background,
   },
-  avatarMark: { color: colors.primaryDark, fontSize: 28, fontWeight: '800' },
-  name: { fontSize: 20, fontWeight: '700', color: colors.text, marginTop: spacing.sm },
-  role: { fontSize: typography.body.size, color: colors.textMuted, marginTop: 2 },
-  section: { marginTop: spacing.sm },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
+  scroll: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xxl,
+    gap: spacing.lg,
+  },
+  hero: {
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    gap: spacing.xs,
+  },
+  name: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    marginTop: spacing.xs,
+  },
+  badgeRow: {
+    marginTop: spacing.xxs,
+  },
+  section: {
+    gap: spacing.sm,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  card: {
+    padding: spacing.base,
+  },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: spacing.sm + 2,
+    paddingVertical: spacing.md,
   },
-  infoLabel: { fontSize: typography.body.size, color: colors.textMuted },
-  infoValue: { fontSize: typography.body.size, color: colors.text, fontWeight: '600', maxWidth: '60%', textAlign: 'right' },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm + 2,
+  infoLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
   },
-  balanceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.sm + 2,
+  infoValue: {
+    fontSize: 15,
+    color: colors.textPrimary,
+    fontWeight: '600',
+    maxWidth: '65%',
+    textAlign: 'right',
   },
-  divider: { height: 1, backgroundColor: colors.border },
-  helper: { fontSize: typography.helper.size, color: colors.textMuted, marginTop: spacing.sm },
+  monoText: {
+    fontVariant: ['tabular-nums'],
+    letterSpacing: 0.5,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  helper: {
+    fontSize: typography.caption.size,
+    color: colors.textTertiary,
+    marginTop: spacing.xs,
+  },
 });

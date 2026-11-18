@@ -1,7 +1,8 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Icon, IconName } from '../ui/Icon';
 import { colors } from '../../constants/colors';
-import { spacing, typography } from '../../constants/layout';
+import { radius, spacing } from '../../constants/layout';
 import type { Notification } from '../../types/db';
 import { formatRelative } from '../../utils/format';
 
@@ -11,11 +12,29 @@ type Props = {
 };
 
 /**
- * Compact notification row. Used in the customer notifications tab.
+ * Compact notification row. Matches Figma §15.
+ * 72 pt tall, category-tinted icon plate, unread accent dot.
  */
 export function NotificationRow({ notification, onPress }: Props) {
   const Wrap: React.ElementType = onPress ? Pressable : View;
-  const dotColor = notification.is_read ? 'transparent' : colors.primary;
+
+  // Derive icon & color from notification title/content
+  const getIconConfig = (): { name: IconName; bg: string; fg: string } => {
+    const text = (notification.title + ' ' + notification.message).toLowerCase();
+    if (text.includes('transfer') || text.includes('sent') || text.includes('received')) {
+      return { name: 'send', bg: colors.primaryLight, fg: colors.primary };
+    }
+    if (text.includes('deposit') || text.includes('credited')) {
+      return { name: 'arrow-down', bg: colors.successBg, fg: colors.success };
+    }
+    if (text.includes('withdraw') || text.includes('debited')) {
+      return { name: 'arrow-up', bg: colors.warningBg, fg: colors.warning };
+    }
+    return { name: 'bell', bg: colors.surface, fg: colors.textSecondary };
+  };
+
+  const iconCfg = getIconConfig();
+
   return (
     <Wrap
       accessibilityRole={onPress ? 'button' : 'text'}
@@ -23,15 +42,23 @@ export function NotificationRow({ notification, onPress }: Props) {
       onPress={onPress}
       style={({ pressed }: { pressed?: boolean }) => [
         styles.row,
+        !notification.is_read && styles.rowUnread,
         pressed && styles.pressed,
       ]}
     >
-      <View style={styles.iconPlate}>
-        <Text style={styles.iconMark}>!</Text>
+      <View style={[styles.iconPlate, { backgroundColor: iconCfg.bg }]}>
+        <Icon name={iconCfg.name} size={18} color={iconCfg.fg} />
       </View>
+
       <View style={styles.middle}>
         <View style={styles.titleRow}>
-          <Text style={styles.title} numberOfLines={1}>
+          <Text
+            style={[
+              styles.title,
+              !notification.is_read && styles.titleUnread,
+            ]}
+            numberOfLines={1}
+          >
             {notification.title}
           </Text>
           <Text style={styles.time}>{formatRelative(notification.created_at)}</Text>
@@ -40,7 +67,8 @@ export function NotificationRow({ notification, onPress }: Props) {
           {notification.message}
         </Text>
       </View>
-      <View style={[styles.unreadDot, { backgroundColor: dotColor }]} />
+
+      {!notification.is_read && <View style={styles.unreadDot} />}
     </Wrap>
   );
 }
@@ -48,61 +76,67 @@ export function NotificationRow({ notification, onPress }: Props) {
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     backgroundColor: colors.background,
-    borderRadius: 12,
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    minHeight: 72,
+    paddingHorizontal: spacing.base,
+    height: 72, // Figma specification: 72 pt tall
     marginBottom: spacing.sm,
   },
-  pressed: { opacity: 0.9 },
+  rowUnread: {
+    backgroundColor: '#F9FBFF',
+    borderColor: colors.primaryMuted,
+  },
+  pressed: {
+    opacity: 0.9,
+    backgroundColor: colors.surfaceSubtle,
+  },
   iconPlate: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
   },
-  iconMark: {
-    color: colors.primary,
-    fontSize: 18,
-    fontWeight: '800',
-  },
   middle: {
     flex: 1,
-    paddingRight: spacing.sm,
+    paddingRight: spacing.xs,
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 2,
   },
   title: {
-    fontSize: typography.body.size,
+    fontSize: 14,
     fontWeight: '600',
-    color: colors.text,
+    color: colors.textPrimary,
     flex: 1,
     paddingRight: spacing.sm,
   },
+  titleUnread: {
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
   time: {
-    fontSize: typography.helper.size,
-    color: colors.textMuted,
+    fontSize: 11,
+    color: colors.textTertiary,
+    flexShrink: 0,
   },
   message: {
-    fontSize: typography.helper.size + 1,
-    color: colors.textMuted,
-    marginTop: 2,
-    lineHeight: (typography.helper.size + 1) * 1.4,
+    fontSize: 12,
+    color: colors.textSecondary,
+    lineHeight: 16,
   },
   unreadDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginTop: 8,
+    backgroundColor: colors.primary,
+    marginLeft: spacing.xs,
   },
 });
