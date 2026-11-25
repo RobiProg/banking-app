@@ -8,6 +8,9 @@
 
 const CURRENCY_SYMBOL = '৳';
 
+/** Masked balance placeholder using asterisk characters for privacy. */
+export const MASKED_BALANCE = `${CURRENCY_SYMBOL} ******`;
+
 const numberFmt = new Intl.NumberFormat('en-US', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,

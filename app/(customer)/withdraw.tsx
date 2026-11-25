@@ -13,6 +13,7 @@ import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { LoadingState } from '../../components/common/LoadingState';
 import { ErrorState } from '../../components/common/ErrorState';
 import { Money } from '../../components/common/Money';
+import { ToggleableBalance } from '../../components/common/ToggleableBalance';
 import { colors } from '../../constants/colors';
 import { radius, spacing } from '../../constants/layout';
 import { ROUTES } from '../../constants/routes';
@@ -183,7 +184,12 @@ export default function WithdrawScreen() {
           <View style={styles.balanceCardHeader}>
             <View>
               <Text style={styles.balanceLabel}>Available balance</Text>
-              <Money value={account.balance} size="large" />
+              <ToggleableBalance
+                value={account.balance}
+                size="large"
+                iconSize={18}
+                buttonSize={32}
+              />
             </View>
             <View style={styles.accountNumberBadge}>
               <Text style={styles.accountNumberText}>{account.account_number}</Text>

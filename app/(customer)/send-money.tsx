@@ -13,7 +13,7 @@ import { FormErrorBanner } from '../../components/auth/FormErrorBanner';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog';
 import { LoadingState } from '../../components/common/LoadingState';
 import { ErrorState } from '../../components/common/ErrorState';
-import { Money } from '../../components/common/Money';
+import { ToggleableBalance } from '../../components/common/ToggleableBalance';
 import { colors } from '../../constants/colors';
 import { radius, spacing } from '../../constants/layout';
 import { ROUTES } from '../../constants/routes';
@@ -259,7 +259,12 @@ export default function SendMoneyScreen() {
             </View>
             <View style={styles.balanceRight}>
               <Text style={styles.balanceCaption}>Available</Text>
-              <Money value={account.balance} size="small" />
+              <ToggleableBalance
+                value={account.balance}
+                size="small"
+                iconSize={15}
+                buttonSize={26}
+              />
             </View>
           </View>
         </Card>

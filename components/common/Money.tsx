@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, TextStyle, ViewStyle } from 'react-native';
 import { colors } from '../../constants/colors';
-import { formatBDT, formatSignedBDT } from '../../utils/format';
+import { formatBDT, formatSignedBDT, MASKED_BALANCE } from '../../utils/format';
 
 type MoneyProps = {
   /** Numeric value or numeric-string from Supabase NUMERIC column. */
@@ -14,6 +14,8 @@ type MoneyProps = {
   style?: ViewStyle;
   sign?: 'positive' | 'negative';
   prefix?: string;
+  /** Mask the monetary value behind asterisks for privacy. */
+  hidden?: boolean;
 };
 
 /**
@@ -31,9 +33,12 @@ export function Money({
   style,
   sign,
   prefix,
+  hidden = false,
 }: MoneyProps) {
   const fontSize = SIZE[size].fontSize;
-  const formatted = sign
+  const formatted = hidden
+    ? MASKED_BALANCE
+    : sign
     ? formatSignedBDT(value, sign)
     : `${prefix ?? ''}${formatBDT(value)}`;
 

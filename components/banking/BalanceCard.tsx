@@ -6,12 +6,11 @@ import { colors } from '../../constants/colors';
 import { radius, spacing } from '../../constants/layout';
 import { ROUTES } from '../../constants/routes';
 import type { Account } from '../../types/db';
-import { formatBDT } from '../../utils/format';
-import { Money } from '../common/Money';
+import { ToggleableBalance } from '../common/ToggleableBalance';
 
 type Props = {
   account: Account;
-  /** Hide the actual balance behind a mask. */
+  /** Override whether the balance is hidden behind asterisks. */
   hidden?: boolean;
   onToggleHide?: () => void;
 };
@@ -19,9 +18,9 @@ type Props = {
 /**
  * Hero Balance Card. Matches Figma §5 & §7.
  * Primary gradient feel (#0A6BD3 to #0856A8), 20pt radius,
- * eye visibility toggle, and pill action button for account details.
+ * masked balance with adjacent eye visibility toggle, and pill action button for account details.
  */
-export function BalanceCard({ account, hidden = false, onToggleHide }: Props) {
+export function BalanceCard({ account, hidden, onToggleHide }: Props) {
   const router = useRouter();
 
   const isBlocked = account?.status === 'blocked';
@@ -49,31 +48,22 @@ export function BalanceCard({ account, hidden = false, onToggleHide }: Props) {
             </Text>
           </View>
         </View>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={hidden ? 'Show balance' : 'Hide balance'}
-          accessibilityState={{ selected: hidden }}
-          onPress={() => onToggleHide?.()}
-          hitSlop={10}
-          style={styles.eyeBtn}
-        >
-          <Icon
-            name={hidden ? 'eye-off' : 'eye'}
-            size={20}
-            color={colors.textOnPrimary}
-          />
-        </Pressable>
       </View>
 
-      {/* Balance Center Amount */}
-      <View style={styles.balanceSection}>
-        {hidden ? (
-          <Text style={styles.masked}>৳ ••••••</Text>
-        ) : (
-          <Money value={account?.balance ?? 0} size="xl" color={colors.textOnPrimary} />
-        )}
-      </View>
+      {/* Balance Center Amount + Adjacent Eye Toggle */}
+      <ToggleableBalance
+        value={account?.balance ?? 0}
+        size="xl"
+        color={colors.textOnPrimary}
+        iconColor={colors.textOnPrimary}
+        iconSize={20}
+        buttonSize={36}
+        buttonStyle={styles.eyeBtn}
+        buttonPressedStyle={styles.eyeBtnPressed}
+        style={styles.balanceSection}
+        hidden={hidden}
+        onToggleHide={onToggleHide}
+      />
 
       {/* Bottom Row */}
       <View style={styles.rowBottom}>
@@ -152,21 +142,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   eyeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.pill,
     backgroundColor: 'rgba(255, 255, 255, 0.16)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  },
+  eyeBtnPressed: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
   },
   balanceSection: {
     marginVertical: spacing.md,
-  },
-  masked: {
-    color: colors.textOnPrimary,
-    fontSize: 34,
-    fontWeight: '700',
-    letterSpacing: 2,
   },
   rowBottom: {
     flexDirection: 'row',

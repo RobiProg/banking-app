@@ -7,17 +7,20 @@ import { radius, spacing } from '../../constants/layout';
 import { ROUTES } from '../../constants/routes';
 import type { Account } from '../../types/db';
 import { maskAccountNumber } from '../../utils/format';
-import { Money } from '../common/Money';
+import { ToggleableBalance } from '../common/ToggleableBalance';
 
 type Props = {
   account: Account;
+  /** Override whether the balance is hidden behind asterisks. */
+  hidden?: boolean;
+  onToggleHide?: () => void;
 };
 
 /**
  * Account Row Card. Matches Figma §5 & §6.
  * 72pt tall card, 16pt radius, tinted bank plate, masked number and balance.
  */
-export function AccountCard({ account }: Props) {
+export function AccountCard({ account, hidden, onToggleHide }: Props) {
   const router = useRouter();
 
   return (
@@ -41,7 +44,14 @@ export function AccountCard({ account }: Props) {
       </View>
 
       <View style={styles.right}>
-        <Money value={account.balance} size="medium" />
+        <ToggleableBalance
+          value={account.balance}
+          size="medium"
+          iconSize={16}
+          buttonSize={28}
+          hidden={hidden}
+          onToggleHide={onToggleHide}
+        />
         <Icon name="chevron-right" size={16} color={colors.textSecondary} />
       </View>
     </Pressable>

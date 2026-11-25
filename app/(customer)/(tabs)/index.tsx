@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -37,8 +37,6 @@ export default function CustomerHomeScreen() {
     myAccountId,
     autoLoad: !!account,
   });
-
-  const [hidden, setHidden] = useState(false);
 
   if (acctLoading) {
     return (
@@ -116,11 +114,7 @@ export default function CustomerHomeScreen() {
         </View>
 
         {/* Hero Balance Card */}
-        <BalanceCard
-          account={account}
-          hidden={hidden}
-          onToggleHide={() => setHidden((h) => !h)}
-        />
+        <BalanceCard account={account} />
 
         {/* Quick Actions Grid */}
         <View style={styles.section}>

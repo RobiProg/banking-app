@@ -6,6 +6,7 @@ import { useProfile, isAdmin } from '../../hooks/useProfile';
 import { useSession } from '../../hooks/useSession';
 import { ROUTES } from '../../constants/routes';
 import { ScreenContainer } from '../../components/auth/ScreenContainer';
+import { BalanceVisibilityProvider } from '../../hooks/useBalanceVisibility';
 
 import { signOut } from '../../services/auth';
 
@@ -58,5 +59,9 @@ export default function CustomerLayout() {
     return <Redirect href={ROUTES.adminDashboard} />;
   }
 
-  return <Stack screenOptions={{ headerShown: false, animation: 'fade' }} />;
+  return (
+    <BalanceVisibilityProvider>
+      <Stack screenOptions={{ headerShown: false, animation: 'fade' }} />
+    </BalanceVisibilityProvider>
+  );
 }
