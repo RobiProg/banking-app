@@ -101,10 +101,10 @@ export default function AccountDetailScreen() {
 
           <Pressable
             style={({ pressed }) => [styles.actionTile, pressed && styles.actionPressed]}
-            onPress={() => router.push(ROUTES.transactions)}
+            onPress={() => router.push(ROUTES.statement)}
           >
             <View style={styles.actionIconCircle}>
-              <Icon name="history" size={20} color={colors.primary} />
+              <Icon name="document" size={20} color={colors.primary} />
             </View>
             <Text style={styles.actionLabel}>Statement</Text>
           </Pressable>

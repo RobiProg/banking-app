@@ -61,6 +61,7 @@ export type Transaction = {
   status: TransactionStatus;
   initiated_by?: string | null;
   idempotency_key?: string | null;
+  branches?: { name: string; district: string; branch_code?: string } | null;
   created_at: string;
 };
 

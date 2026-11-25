@@ -102,6 +102,80 @@ export async function listTransactions(
   }
 }
 
+export type DateRangeTxnsParams = {
+  fromIso?: string;
+  afterIso?: string;
+  toIso?: string;
+  ascending?: boolean;
+  status?: Transaction['status'];
+};
+
+const STATEMENT_PAGE_SIZE = 500;
+
+/**
+ * Fetch all transactions for the signed-in customer within a date window,
+ * paginating automatically so bank statements never silently truncate rows.
+ */
+export async function listTransactionsInRange(
+  params: DateRangeTxnsParams,
+): Promise<ListTxnsResult> {
+  try {
+    const allRows: Transaction[] = [];
+    let offset = 0;
+
+    while (true) {
+      let q = supabase
+        .from('transactions')
+        .select('*, branches(name, district, branch_code)')
+        .order('created_at', { ascending: params.ascending ?? true })
+        .range(offset, offset + STATEMENT_PAGE_SIZE - 1);
+
+      if (params.fromIso) {
+        q = q.gte('created_at', params.fromIso);
+      }
+      if (params.afterIso) {
+        q = q.gt('created_at', params.afterIso);
+      }
+      if (params.toIso) {
+        q = q.lte('created_at', params.toIso);
+      }
+      if (params.status) {
+        q = q.eq('status', params.status);
+      }
+
+      const { data, error } = await q;
+      if (error) {
+        return { transactions: [], errorMessage: mapAuthError(error.message) };
+      }
+
+      const batch = (
+        (data ?? []) as unknown as Array<
+          Transaction & { transaction_type?: TransactionType; type?: TransactionType }
+        >
+      ).map((t) => {
+        const effType = (t.type ?? t.transaction_type ?? 'transfer') as TransactionType;
+        return {
+          ...t,
+          type: effType,
+          transaction_type: effType,
+        };
+      });
+
+      allRows.push(...batch);
+      if (batch.length < STATEMENT_PAGE_SIZE) {
+        break;
+      }
+      offset += STATEMENT_PAGE_SIZE;
+    }
+
+    return { transactions: allRows, errorMessage: null };
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[transactions] listTransactionsInRange threw:', err);
+    return { transactions: [], errorMessage: 'Something went wrong. Please try again.' };
+  }
+}
+
 export async function getTransactionById(
   id: string,
 ): Promise<{ transaction: Transaction | null; errorMessage: string | null }> {

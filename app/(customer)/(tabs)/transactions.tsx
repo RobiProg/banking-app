@@ -88,19 +88,31 @@ export default function CustomerTransactionsTab() {
       {/* Top Bar (§10) */}
       <View style={styles.headerRow}>
         <Text style={styles.title}>Transactions</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Toggle search"
-          onPress={() => setShowSearch((prev) => !prev)}
-          hitSlop={8}
-          style={[styles.searchToggle, showSearch && styles.searchToggleActive]}
-        >
-          <Icon
-            name="search"
-            size={18}
-            color={showSearch ? colors.primary : colors.textPrimary}
-          />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Get bank statement PDF"
+            onPress={() => router.push(ROUTES.statement)}
+            hitSlop={8}
+            style={({ pressed }) => [styles.statementBtn, pressed && styles.pressed]}
+          >
+            <Icon name="document" size={16} color={colors.primary} />
+            <Text style={styles.statementBtnText}>Statement</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Toggle search"
+            onPress={() => setShowSearch((prev) => !prev)}
+            hitSlop={8}
+            style={[styles.searchToggle, showSearch && styles.searchToggleActive]}
+          >
+            <Icon
+              name="search"
+              size={18}
+              color={showSearch ? colors.primary : colors.textPrimary}
+            />
+          </Pressable>
+        </View>
       </View>
 
       {/* Expandable Search Input */}
@@ -244,6 +256,27 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  statementBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 38,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.primaryLight,
+    borderWidth: 1,
+    borderColor: colors.primaryMuted,
+  },
+  statementBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.primary,
   },
   searchToggleActive: {
     backgroundColor: colors.primaryLight,

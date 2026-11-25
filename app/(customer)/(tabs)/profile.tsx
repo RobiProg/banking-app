@@ -260,6 +260,21 @@ export default function CustomerProfileTab() {
               </View>
               <Icon name="chevron-right" size={16} color={colors.textSecondary} />
             </Pressable>
+
+            <View style={styles.rowDivider} />
+
+            <Pressable
+              style={styles.menuRow}
+              onPress={() => router.push(ROUTES.statement)}
+            >
+              <View style={styles.menuLeft}>
+                <View style={styles.menuIconPlate}>
+                  <Icon name="document" size={18} color={colors.primary} />
+                </View>
+                <Text style={styles.menuLabel}>Bank statement (PDF)</Text>
+              </View>
+              <Icon name="chevron-right" size={16} color={colors.textSecondary} />
+            </Pressable>
           </Card>
         </View>
 

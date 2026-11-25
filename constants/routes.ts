@@ -22,6 +22,7 @@ export const ROUTES = {
   deposit: '/(customer)/deposit',
   withdraw: '/(customer)/withdraw',
   sendMoney: '/(customer)/send-money',
+  statement: '/(customer)/statement',
   transactionDetails: '/(customer)/transaction-details', // [id] appended at runtime
 
   // Admin / Staff app
